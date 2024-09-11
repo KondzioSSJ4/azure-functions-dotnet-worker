@@ -20,6 +20,9 @@ namespace Microsoft.Azure.Functions.Worker
                 throw new ArgumentNullException(nameof(context));
             }
 
+            IServiceProvider provider = null;
+            provider.GetService(instanceType);
+
             return ActivatorUtilities.CreateInstance(context.InstanceServices, instanceType, Array.Empty<object>());
         }
     }

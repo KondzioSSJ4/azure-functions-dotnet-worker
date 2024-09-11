@@ -10,6 +10,7 @@ using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Core;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
+using VerifyTests;
 using VerifyXunit;
 using Xunit;
 
@@ -30,6 +31,7 @@ namespace Microsoft.Azure.Functions.SdkGeneratorTests.Helpers
             string? generatedCodeNamespace = null,
             LanguageVersion? languageVersion = null,
             bool runInsideAzureFunctionProject = true,
+            bool verifyDiagnostics = false,
             [CallerFilePath] string callerFileName = "",
             [CallerMemberName] string callerName = "")
         {
@@ -39,6 +41,15 @@ namespace Microsoft.Azure.Functions.SdkGeneratorTests.Helpers
 #endif
 
             var compilation = CreateCompilation(inputSource, extensionAssemblyReferences, languageVersion);
+            if (!verifyDiagnostics
+                && !AssertDiagnostics(compilation))
+            {
+                return;
+            }
+
+            //var isDiagnosticsValid = verifyDiagnostics
+            //    ? await VerifyDiagnostics(compilation, callerFileName, callerName)
+            //    : ;
 
             var config = CreateAnalyzerOptions(
                 buildPropertiesDictionary,
@@ -63,6 +74,7 @@ namespace Microsoft.Azure.Functions.SdkGeneratorTests.Helpers
             string? generatedCodeNamespace = null,
             LanguageVersion? languageVersion = null,
             bool runInsideAzureFunctionProject = true,
+            bool verifyDiagnostics = false,
             [CallerFilePath] string callerFileName = "",
             [CallerMemberName] string callerName = "")
         {
@@ -72,6 +84,14 @@ namespace Microsoft.Azure.Functions.SdkGeneratorTests.Helpers
 #endif
 
             var compilation = CreateCompilation(inputSource, extensionAssemblyReferences, languageVersion);
+            var isDiagnosticsValid = verifyDiagnostics
+                ? await VerifyDiagnostics(compilation, callerFileName, callerName)
+                : AssertDiagnostics(compilation);
+
+            if (!isDiagnosticsValid)
+            {
+                return;
+            }
 
             var config = CreateAnalyzerOptions(
                 buildPropertiesDictionary,
@@ -88,11 +108,37 @@ namespace Microsoft.Azure.Functions.SdkGeneratorTests.Helpers
             await VerifyGeneratedCode(generateResult, callerFileName, callerName);
         }
 
-        private static VerifyTests.SettingsTask VerifyGeneratedCode(GeneratorDriver generateResult, string callerFileName, string callerName)
+        private static async Task<bool> VerifyDiagnostics(
+            CSharpCompilation compilation,
+            string callerFileName,
+            string callerName)
         {
-            var settings = Verifier
-                .Verify(generateResult)
-                .DisableRequireUniquePrefix();
+            var diags = compilation
+                .GetDiagnostics()
+                .Where(d => !GetIgnoredErrors().Contains(d.Id))
+                .Select(x => new
+                {
+                    x.Id,
+                    Location = x.Location.SourceSpan,
+                    x.Severity,
+                    Message = x.GetMessage()
+                }).ToArray();
+
+            await Configure(Verifier.Verify(diags), callerFileName, callerName);
+            return diags.Any(x => x.Severity >= DiagnosticSeverity.Error);
+        }
+
+        private static SettingsTask VerifyGeneratedCode(GeneratorDriver generateResult, string callerFileName, string callerName)
+        {
+            return Configure(Verifier.Verify(generateResult), callerFileName, callerName);
+        }
+
+        private static SettingsTask Configure(
+            SettingsTask settings,
+            string callerFileName,
+            string callerName)
+        {
+            settings = settings.DisableRequireUniquePrefix();
 
             if (!string.IsNullOrWhiteSpace(callerFileName))
             {
@@ -134,7 +180,10 @@ namespace Microsoft.Azure.Functions.SdkGeneratorTests.Helpers
             return config;
         }
 
-        private static CSharpCompilation CreateCompilation(string inputSource, IEnumerable<Assembly>? extensionAssemblyReferences, LanguageVersion? languageVersion)
+        private static CSharpCompilation CreateCompilation(
+            string inputSource,
+            IEnumerable<Assembly>? extensionAssemblyReferences,
+            LanguageVersion? languageVersion)
         {
             var syntaxTree = CSharpSyntaxTree.ParseText(
                 inputSource,
@@ -156,13 +205,18 @@ namespace Microsoft.Azure.Functions.SdkGeneratorTests.Helpers
                 new[] { syntaxTree },
                 metadata);
 
+            return compilation;
+        }
+
+        private static bool AssertDiagnostics(CSharpCompilation compilation)
+        {
             var errors = compilation.GetDiagnostics()
-                .Where(d => d.DefaultSeverity >= DiagnosticSeverity.Error
+                .Where(d => d.Severity >= DiagnosticSeverity.Error
                     && !GetIgnoredErrors().Contains(d.Id))
                 .ToArray();
 
             Assert.Empty(errors);
-            return compilation;
+            return true;
         }
 
         private static IEnumerable<string> GetAllAssemblies(

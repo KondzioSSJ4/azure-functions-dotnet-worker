@@ -69,5 +69,18 @@ namespace Microsoft.Azure.Functions.Worker.Sdk.Generators
                     category: "FunctionMetadataGeneration",
                     severity: DiagnosticSeverity.Error);
 
+        public static DiagnosticDescriptor InconclusiveAttribute { get; }
+            = Create(id: "AZFW0014",
+                title: "Multiple attributes assigned to method or property",
+                messageFormat: "Multiple attributes assigned to method or property. Remove duplicated attributes",
+                category: "FunctionMetadataGeneration",
+                severity: DiagnosticSeverity.Error);
+
+        public static DiagnosticDescriptor InconclusiveCtor { get; }
+            = Create(id: "AZFW0015",
+                title: "Function have many constructors",
+                messageFormat: "Class or record have more than 1 constructor",
+                category: "FunctionMetadataGeneration",
+                severity: DiagnosticSeverity.Error);
     }
 }
