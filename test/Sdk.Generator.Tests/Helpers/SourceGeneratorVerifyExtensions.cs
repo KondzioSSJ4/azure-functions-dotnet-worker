@@ -10,6 +10,8 @@ using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Core;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.Text;
+using Microsoft.Extensions.Hosting;
 using VerifyTests;
 using VerifyXunit;
 using Xunit;
@@ -20,7 +22,7 @@ namespace Microsoft.Azure.Functions.SdkGeneratorTests.Helpers
     {
         private const LanguageVersion _defaultLanguageVersion = LanguageVersion.CSharp7_3;
 
-        private static readonly string _dotNetAssemblyPath = Path.GetDirectoryName(typeof(object).Assembly.Location);
+        private static readonly string _dotNetAssemblyPath = Path.GetDirectoryName(typeof(object).Assembly.Location)!;
         private static readonly TimeSpan _executionMaxTime = TimeSpan.FromSeconds(30);
 
         public static async Task RunAndVerify(
@@ -31,7 +33,6 @@ namespace Microsoft.Azure.Functions.SdkGeneratorTests.Helpers
             string? generatedCodeNamespace = null,
             LanguageVersion? languageVersion = null,
             bool runInsideAzureFunctionProject = true,
-            bool verifyDiagnostics = false,
             [CallerFilePath] string callerFileName = "",
             [CallerMemberName] string callerName = "")
         {
@@ -41,15 +42,10 @@ namespace Microsoft.Azure.Functions.SdkGeneratorTests.Helpers
 #endif
 
             var compilation = CreateCompilation(inputSource, extensionAssemblyReferences, languageVersion);
-            if (!verifyDiagnostics
-                && !AssertDiagnostics(compilation))
+            if (!AssertDiagnostics(compilation))
             {
                 return;
             }
-
-            //var isDiagnosticsValid = verifyDiagnostics
-            //    ? await VerifyDiagnostics(compilation, callerFileName, callerName)
-            //    : ;
 
             var config = CreateAnalyzerOptions(
                 buildPropertiesDictionary,
@@ -61,8 +57,9 @@ namespace Microsoft.Azure.Functions.SdkGeneratorTests.Helpers
                 .WithUpdatedAnalyzerConfigOptions(config);
 
             var generateResult = driver.RunGenerators(compilation, cts.Token);
-
             cts.Token.ThrowIfCancellationRequested();
+
+            await AssertDiagnosticsOfGeneratedCode(languageVersion, compilation, generateResult, cts.Token);
             await VerifyGeneratedCode(generateResult, callerFileName, callerName);
         }
 
@@ -74,7 +71,6 @@ namespace Microsoft.Azure.Functions.SdkGeneratorTests.Helpers
             string? generatedCodeNamespace = null,
             LanguageVersion? languageVersion = null,
             bool runInsideAzureFunctionProject = true,
-            bool verifyDiagnostics = false,
             [CallerFilePath] string callerFileName = "",
             [CallerMemberName] string callerName = "")
         {
@@ -84,11 +80,7 @@ namespace Microsoft.Azure.Functions.SdkGeneratorTests.Helpers
 #endif
 
             var compilation = CreateCompilation(inputSource, extensionAssemblyReferences, languageVersion);
-            var isDiagnosticsValid = verifyDiagnostics
-                ? await VerifyDiagnostics(compilation, callerFileName, callerName)
-                : AssertDiagnostics(compilation);
-
-            if (!isDiagnosticsValid)
+            if (!AssertDiagnostics(compilation))
             {
                 return;
             }
@@ -103,34 +95,69 @@ namespace Microsoft.Azure.Functions.SdkGeneratorTests.Helpers
                 .WithUpdatedAnalyzerConfigOptions(config);
 
             var generateResult = driver.RunGenerators(compilation, cts.Token);
-
             cts.Token.ThrowIfCancellationRequested();
+
+            await AssertDiagnosticsOfGeneratedCode(languageVersion, compilation, generateResult, cts.Token);
             await VerifyGeneratedCode(generateResult, callerFileName, callerName);
         }
 
-        private static async Task<bool> VerifyDiagnostics(
+        private static async Task AssertDiagnosticsOfGeneratedCode(
+            LanguageVersion? languageVersion,
             CSharpCompilation compilation,
+            GeneratorDriver generateResult,
+            CancellationToken cancellationToken)
+        {
+            var runResult = generateResult.GetRunResult();
+            if (runResult.GeneratedTrees.Length == 0
+                && runResult.Results.Length == 0)
+            {
+                return;
+            }
+
+            var parseOptions = GetParseOptions(languageVersion);
+
+            var diagnostics = await Task.WhenAll(runResult
+                .GeneratedTrees
+                .Select(async x => new
+                {
+                    FileName = Path.GetFileName(x.FilePath),
+                    Diagnostics = await GetErrorDiagnostics(x, compilation, parseOptions, cancellationToken)
+                }));
+
+            var issues = diagnostics
+                .Where(x => x.Diagnostics.Count > 0)
+                .ToArray();
+
+            Assert.Empty(issues);
+        }
+
+        private static async Task<IReadOnlyCollection<DiagnosticShort>> GetErrorDiagnostics(
+            SyntaxTree syntaxTree,
+            Compilation compilation,
+            CSharpParseOptions parseOptions,
+            CancellationToken ct)
+        {
+            var text = await syntaxTree.GetTextAsync(ct);
+
+            return compilation
+                .AddSyntaxTrees(
+                    CSharpSyntaxTree.ParseText(text, parseOptions, cancellationToken: ct))
+                .GetDiagnostics()
+                .Where(d => d.Severity >= DiagnosticSeverity.Error
+                    && !GetIgnoredErrors().Contains(d.Id))
+                .Select(x => new DiagnosticShort(x, text))
+                .ToArray();
+        }
+
+        private static SettingsTask VerifyGeneratedCode(
+            GeneratorDriver generateResult,
             string callerFileName,
             string callerName)
         {
-            var diags = compilation
-                .GetDiagnostics()
-                .Where(d => !GetIgnoredErrors().Contains(d.Id))
-                .Select(x => new
-                {
-                    x.Id,
-                    Location = x.Location.SourceSpan,
-                    x.Severity,
-                    Message = x.GetMessage()
-                }).ToArray();
-
-            await Configure(Verifier.Verify(diags), callerFileName, callerName);
-            return diags.Any(x => x.Severity >= DiagnosticSeverity.Error);
-        }
-
-        private static SettingsTask VerifyGeneratedCode(GeneratorDriver generateResult, string callerFileName, string callerName)
-        {
-            return Configure(Verifier.Verify(generateResult), callerFileName, callerName);
+            return Configure(
+                Verifier.Verify(generateResult),
+                callerFileName,
+                callerName);
         }
 
         private static SettingsTask Configure(
@@ -185,16 +212,15 @@ namespace Microsoft.Azure.Functions.SdkGeneratorTests.Helpers
             IEnumerable<Assembly>? extensionAssemblyReferences,
             LanguageVersion? languageVersion)
         {
-            var syntaxTree = CSharpSyntaxTree.ParseText(
-                inputSource,
-                new CSharpParseOptions(languageVersion ?? _defaultLanguageVersion));
+            var syntaxTree = CreateSyntaxTree(inputSource, languageVersion);
 
             var metadata = GetAllAssemblies((extensionAssemblyReferences ?? Array.Empty<Assembly>())
                 .Concat(new[]
                 {
                     typeof(WorkerExtensionStartupAttribute).Assembly,
                     typeof(HttpTriggerAttribute).Assembly,
-                    typeof(FunctionAttribute).Assembly
+                    typeof(FunctionAttribute).Assembly,
+                    typeof(HostBuilder).Assembly
                 }))
                 .Distinct()
                 .Select(l => MetadataReference.CreateFromFile(l))
@@ -206,6 +232,20 @@ namespace Microsoft.Azure.Functions.SdkGeneratorTests.Helpers
                 metadata);
 
             return compilation;
+        }
+
+        private static SyntaxTree CreateSyntaxTree(
+            string inputSource,
+            LanguageVersion? languageVersion)
+        {
+            return CSharpSyntaxTree.ParseText(
+                inputSource,
+                GetParseOptions(languageVersion));
+        }
+
+        private static CSharpParseOptions GetParseOptions(LanguageVersion? languageVersion)
+        {
+            return new CSharpParseOptions(languageVersion ?? _defaultLanguageVersion);
         }
 
         private static bool AssertDiagnostics(CSharpCompilation compilation)
@@ -262,6 +302,45 @@ namespace Microsoft.Azure.Functions.SdkGeneratorTests.Helpers
         private static IEnumerable<string> GetIgnoredErrors()
         {
             yield return "CS5001"; // Program does not contain a static 'Main' method suitable for an entry point
+        }
+
+        private class DiagnosticShort
+        {
+            private const int TextRangeInfoChars = 30;
+
+            public DiagnosticShort(
+                Diagnostic diagnostic,
+                SourceText text)
+            {
+                Id = diagnostic.Id;
+                Severity = diagnostic.Severity;
+                Message = diagnostic.GetMessage();
+                IssueSyntaxLine = GetLine(diagnostic, text);
+            }
+
+            private static string? GetLine(
+                Diagnostic diagnostic,
+                SourceText text)
+            {
+                if (diagnostic.Location == Location.None)
+                {
+                    return null;
+                }
+
+                var span = diagnostic.Location.SourceSpan;
+
+                var subText = text.GetSubText(
+                    TextSpan.FromBounds(
+                        Math.Max(0, span.Start - TextRangeInfoChars),
+                        Math.Min(text.Length - 1, span.End + TextRangeInfoChars)));
+
+                return subText.ToString();
+            }
+
+            public string Id { get; }
+            public DiagnosticSeverity Severity { get; }
+            public string Message { get; }
+            public string? IssueSyntaxLine { get; }
         }
     }
 }

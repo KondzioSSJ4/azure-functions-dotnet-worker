@@ -136,8 +136,7 @@ namespace Microsoft.Azure.Functions.SdkGeneratorTests.FunctionActivator
                 
                     public class OtherInjectedClass { }
                 }
-                """,
-                verifyDiagnostics: true);
+                """);
         }
 
         [Fact]
@@ -204,7 +203,6 @@ namespace Microsoft.Azure.Functions.SdkGeneratorTests.FunctionActivator
 
         private async Task Test(
             string sourceCode,
-            bool verifyDiagnostics = false,
             LanguageVersion? languageVersion = null,
             [CallerMemberName] string callerName = "")
         {
@@ -214,10 +212,10 @@ namespace Microsoft.Azure.Functions.SdkGeneratorTests.FunctionActivator
                     new[]
                     {
                         typeof(HttpTriggerAttribute).Assembly,
-                        typeof(FunctionAttribute).Assembly
+                        typeof(FunctionAttribute).Assembly,
+                        typeof(IFunctionActivator).Assembly
                     },
-                    verifyDiagnostics: verifyDiagnostics,
-                    languageVersion: languageVersion,
+                    languageVersion: languageVersion ?? LanguageVersion.CSharp10,
                     callerName: callerName);
         }
     }

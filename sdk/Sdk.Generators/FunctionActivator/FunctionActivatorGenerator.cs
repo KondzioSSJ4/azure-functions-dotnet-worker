@@ -64,6 +64,7 @@ namespace Microsoft.Azure.Functions.Worker.Sdk.Generators.FunctionActivator
                         "GeneratedFunctionActivator.g.cs",
                         $$"""
                         using System;
+                        using Microsoft.Azure.Functions.Worker;
                         using Microsoft.Extensions.DependencyInjection;
                         using Microsoft.Extensions.Hosting;
 
@@ -71,7 +72,7 @@ namespace Microsoft.Azure.Functions.Worker.Sdk.Generators.FunctionActivator
                         {
                             internal sealed class GeneratedFunctionActivator : IFunctionActivator
                             {
-                                private readonly IServiceProvider provider;
+                                private readonly IServiceProvider _provider;
                         
                                 public GeneratedFunctionActivator(IServiceProvider provider)
                                 {
@@ -90,7 +91,7 @@ namespace Microsoft.Azure.Functions.Worker.Sdk.Generators.FunctionActivator
                                         throw new ArgumentNullException(nameof(context));
                                     }
                         
-                                    return provider.GetService(instanceType)
+                                    return _provider.GetService(instanceType)
                                         ?? ActivatorUtilities.CreateInstance(context.InstanceServices, instanceType, Array.Empty<object>());
                                 }
                             }
@@ -101,9 +102,9 @@ namespace Microsoft.Azure.Functions.Worker.Sdk.Generators.FunctionActivator
                             internal static class InjectableFunctionsExtensions
                             {
                                 ///<summary>
-                                /// Configures an optimized function executor to the invocation pipeline.
+                                /// Configures an optimized function activator to the invocation pipeline.
                                 ///</summary>
-                                public static IHostBuilder ConfigureGeneratedFunctionExecutor(this IHostBuilder builder)
+                                public static IHostBuilder ConfigureGeneratedFunctionActivator(this IHostBuilder builder)
                                 {
                                     return builder.ConfigureServices(s => 
                                     {
@@ -127,7 +128,7 @@ namespace Microsoft.Azure.Functions.Worker.Sdk.Generators.FunctionActivator
                                 /// <param name="hostBuilder">The <see cref="IHostBuilder"/> instance to use for service registration.</param>
                                 public void Configure(IHostBuilder hostBuilder)
                                 {
-                                    hostBuilder.ConfigureGeneratedFunctionExecutor();
+                                    hostBuilder.ConfigureGeneratedFunctionActivator();
                                 }
                             }
                         }
