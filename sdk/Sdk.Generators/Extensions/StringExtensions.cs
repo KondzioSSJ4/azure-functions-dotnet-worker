@@ -3,12 +3,14 @@
 
 using System;
 using System.Collections.Generic;
-using System.Linq;
 
 namespace Microsoft.Azure.Functions.Worker.Sdk.Generators
 {
     internal static class StringExtensions
     {
+        public static string AsOrToString<T>(this T element)
+            => element is string elString ? elString : element.ToString();
+
         public static string TrimStringFromEnd(this string str, string end)
         {
             if (end is null)
@@ -44,6 +46,16 @@ namespace Microsoft.Azure.Functions.Worker.Sdk.Generators
             {
                 return str;
             }
+        }
+
+        public static string ToCammelCase(this string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return value;
+            }
+
+            return char.ToLower(value[0]) + value.Substring(1);
         }
     }
 }

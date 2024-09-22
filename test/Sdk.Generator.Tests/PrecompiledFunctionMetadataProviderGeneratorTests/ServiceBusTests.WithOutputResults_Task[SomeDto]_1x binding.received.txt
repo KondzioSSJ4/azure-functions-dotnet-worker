@@ -1,0 +1,15 @@
+﻿{
+  Diagnostics: [
+    {
+      Id: AZFW0016,
+      Title: Function must have 1 and only 1 trigger,
+      Severity: Error,
+      WarningLevel: 0,
+      Location: : (15,29)-(15,32),
+      HelpLink: https://aka.ms/azfw-rules?ruleid=AZFW0016,
+      MessageFormat: Functions must have 1 trigger, like HttpTriggerAttribute or ServiceBusTriggerAttribute e.c.t. Your function have {0} triggers,
+      Message: Functions must have 1 trigger, like HttpTriggerAttribute or ServiceBusTriggerAttribute e.c.t. Your function have 0 triggers,
+      Category: FunctionMetadataGeneration
+    }
+  ]
+}

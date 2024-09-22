@@ -29,7 +29,7 @@ namespace SampleApp
         [Function(nameof(ServiceBusReceivedMessageFunction))]
         [ServiceBusOutput("outputQueue", Connection = "ServiceBusConnection")]
         public string ServiceBusReceivedMessageFunction(
-            [ServiceBusTrigger("queue", Connection = "ServiceBusConnection")] ServiceBusReceivedMessage message)
+            [ServiceBusTrigger("queue", Connection = "ServiceBusConnection", IsBatched = true)] ServiceBusReceivedMessage message)
         {
             _logger.LogInformation("Message ID: {id}", message.MessageId);
             _logger.LogInformation("Message Body: {body}", message.Body);

@@ -122,6 +122,8 @@ csharp_space_between_method_call_empty_parameter_list_parentheses = false
 # Wrapping preferences
 csharp_preserve_single_line_statements = true
 csharp_preserve_single_line_blocks = true
+file_header_template = Copyright (c) .NET Foundation. All rights reserved. \r\nLicensed under the MIT License. See License.txt in the project root for license information.
+
 ###############################
 # VB Coding Conventions       #
 ###############################

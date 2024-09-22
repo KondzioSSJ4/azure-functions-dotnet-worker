@@ -72,7 +72,7 @@ namespace Microsoft.Azure.Functions.Worker.Sdk.Generators
         public static DiagnosticDescriptor InconclusiveAttribute { get; }
             = Create(id: "AZFW0014",
                 title: "Multiple attributes assigned to method or property",
-                messageFormat: "Multiple attributes assigned to method or property. Remove duplicated attributes",
+                messageFormat: "Multiple attributes ({0}) assigned to method or property. Remove duplicated attributes",
                 category: "FunctionMetadataGeneration",
                 severity: DiagnosticSeverity.Error);
 
@@ -82,5 +82,53 @@ namespace Microsoft.Azure.Functions.Worker.Sdk.Generators
                 messageFormat: "Class or record have more than 1 constructor",
                 category: "FunctionMetadataGeneration",
                 severity: DiagnosticSeverity.Error);
+
+        public static DiagnosticDescriptor InvalidInputTriggerCount { get; }
+            = Create(id: "AZFW0016",
+                title: "Function must have 1 and only 1 trigger",
+                messageFormat: "Functions must have 1 trigger, like HttpTriggerAttribute or ServiceBusTriggerAttribute e.c.t. Your function have {0} triggers",
+                category: "FunctionMetadataGeneration",
+                severity: DiagnosticSeverity.Error);
+
+        public static DiagnosticDescriptor AsyncVoidIsNotAllowed { get; }
+            = Create(id: "AZFW0018",
+                title: "Async void methods are not allowed for Azure Functions",
+                messageFormat: "Functions must have handler of the call, like Task to knows when it was finished.",
+                category: "FunctionMetadataGeneration",
+                severity: DiagnosticSeverity.Error);
+
+        public static DiagnosticDescriptor InvalidBindingType { get; }
+            = Create(id: "AZFW0019",
+                title: "Invalid binding type",
+                messageFormat: "Binding type not allow {0} as {1} type",
+                category: "FunctionMetadataGeneration",
+                severity: DiagnosticSeverity.Error);
+
+        public static DiagnosticDescriptor InconclusiveOutputBinding { get; }
+            = Create(id: "AZFW0020",
+                title: "Inconclusive output binding",
+                messageFormat: """
+                Output binding must return single model output or model with nested outputs.
+                Not allowed:
+                    - Method returning result without output definition
+                    - Output definition exists but return void or Task
+                    - IAsyncEnumerable or IEnumerable with nested model bindings
+                    - Method model output by attribute with nested outputs in model
+                """,
+                category: "FunctionMetadataGeneration",
+                severity: DiagnosticSeverity.Error);
+
+        public static DiagnosticDescriptor InvalidRetryArgument { get; }
+            = Create(id: "AZFW0021",
+                title: "Invalid retry provided",
+                messageFormat: """
+                Invalid retry, {0} must be {1}.
+                """,
+                category: "FunctionMetadataGeneration",
+                severity: DiagnosticSeverity.Error);
+
+        // TODO - ideas:
+        // Warning when there is `Output` attribute with void/Task
+        // Output tuples are not allowed
     }
 }

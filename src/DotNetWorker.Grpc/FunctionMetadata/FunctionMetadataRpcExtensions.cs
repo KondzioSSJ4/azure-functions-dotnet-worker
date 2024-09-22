@@ -18,10 +18,20 @@ namespace Microsoft.Azure.Functions.Worker.Grpc.FunctionMetadata
                 return rpcFuncMetadata.Bindings;
             }
 
-            MapField<string, BindingInfo> bindings = new MapField<string, BindingInfo>();
+            if (funcMetadata is IGeneratedFunctionMetadata generatedMetadata)
+            {
+                return GetFields(generatedMetadata);
+            }
+
+            return ParseFields(funcMetadata);
+        }
+
+        private static MapField<string, BindingInfo> ParseFields(IFunctionMetadata funcMetadata)
+        {
+            var bindings = new MapField<string, BindingInfo>();
             var rawBindings = funcMetadata.RawBindings;
 
-            if(rawBindings is null || rawBindings.Count == 0)
+            if (rawBindings is null || rawBindings.Count == 0)
             {
                 throw new FormatException("At least one binding must be declared in a Function.");
             }
@@ -68,6 +78,58 @@ namespace Microsoft.Azure.Functions.Worker.Grpc.FunctionMetadata
             }
 
             return bindingInfo;
+        }
+
+        private static MapField<string, BindingInfo> GetFields(
+            IGeneratedFunctionMetadata generatedMetadata)
+        {
+            var bindings = new MapField<string, BindingInfo>();
+            var rawBindings = generatedMetadata.GeneratedBindings;
+
+            if (rawBindings is null || rawBindings.Count == 0)
+            {
+                throw new FormatException("At least one binding must be declared in a Function.");
+            }
+
+            foreach (var item in rawBindings)
+            {
+                bindings.Add(item.Name, CreateBindingInfo(item));
+            }
+
+            return bindings;
+        }
+
+        private static BindingInfo CreateBindingInfo(IGeneratedBinding item)
+        {
+            if (string.IsNullOrWhiteSpace(item.DataType)
+                || !Enum.TryParse(item.DataType, out BindingInfo.Types.DataType dataType))
+            {
+                throw new FormatException($"Invalid DataType for a binding: {item.DataType}");
+            }
+
+            var info = new BindingInfo()
+            {
+                Direction = item.Direction switch
+                {
+                    FunctionBindingDirection.In => BindingInfo.Types.Direction.In,
+                    FunctionBindingDirection.Out => BindingInfo.Types.Direction.Out,
+                    FunctionBindingDirection.InOut => BindingInfo.Types.Direction.Inout,
+
+                    _ => throw new FormatException($"Unknown binding {item.Direction} ({(int)item.Direction})")
+                },
+                Type = item.BindingType,
+                DataType = dataType
+            };
+
+            if (item.Properties?.Count > 0)
+            {
+                foreach (var pair in item.Properties)
+                {
+                    info.Properties[pair.Key] = pair.Value;
+                }
+            }
+
+            return info;
         }
     }
 }

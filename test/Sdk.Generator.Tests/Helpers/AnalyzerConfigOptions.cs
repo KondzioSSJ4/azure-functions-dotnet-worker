@@ -10,7 +10,7 @@ namespace Microsoft.Azure.Functions.SdkGeneratorTests.Helpers
         private readonly Options _options;
 
         public AnalyzerConfigOptions(
-            Dictionary<string, string> options)
+            IReadOnlyDictionary<string, string> options)
         {
             _options = new Options(options);
         }
@@ -22,10 +22,10 @@ namespace Microsoft.Azure.Functions.SdkGeneratorTests.Helpers
 
         private class Options : CodeAnalysis.Diagnostics.AnalyzerConfigOptions
         {
-            private readonly Dictionary<string, string> options;
+            private readonly IReadOnlyDictionary<string, string> options;
 
             public Options(
-                Dictionary<string, string> options)
+                IReadOnlyDictionary<string, string> options)
             {
                 this.options = options;
             }

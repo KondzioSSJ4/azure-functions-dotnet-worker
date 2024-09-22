@@ -1,10 +1,9 @@
 ﻿// Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the MIT License. See License.txt in the project root for license information.
 
-using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using Microsoft.Azure.Functions.Worker.Sdk.Generators.Extensions;
 using Microsoft.CodeAnalysis;
 
 namespace Microsoft.Azure.Functions.Worker.Sdk.Generators
@@ -68,7 +67,7 @@ namespace Microsoft.Azure.Functions.Worker.Sdk.Generators
 
             while (current != null)
             {
-                if(SymbolEqualityComparer.Default.Equals(current, other) || SymbolEqualityComparer.Default.Equals(current.OriginalDefinition, other))
+                if (SymbolEqualityComparer.Default.Equals(current, other) || SymbolEqualityComparer.Default.Equals(current.OriginalDefinition, other))
                 {
                     return true;
                 }
@@ -99,6 +98,42 @@ namespace Microsoft.Azure.Functions.Worker.Sdk.Generators
                 }
 
                 current = current.BaseType;
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Used to know if attribute support retry
+        /// Keep in mind that attributes may get retry support after time, so we should not be limited of current attributes state
+        /// </summary>
+        internal static bool IsRetrySupported(
+            this AttributeData attribute)
+        {
+            if (attribute?.AttributeClass is null)
+            {
+                return false;
+            }
+
+            var bindingCapabilities = attribute
+                .AttributeClass
+                .GetAttributes()
+                .Where(x => x.AttributeClass?.ContainingNamespace is not null
+                    && x.AttributeClass.Name == "BindingCapabilitiesAttribute"
+                    && x.AttributeClass.ContainingNamespace.ToString() == "Microsoft.Azure.Functions.Worker.Extensions.Abstractions");
+
+            foreach (var item in bindingCapabilities)
+            {
+                var arguments = item.GetArgumentByConstructor(0);
+                if (!arguments.HasValue
+                    || arguments.Value.IsNull
+                    || !arguments.Value.Values.Any(x => x.Value is not null
+                        && x.Value.ToString() == Constants.BindingCapabilities.FunctionLevelRetry))
+                {
+                    continue;
+                }
+
+                return true;
             }
 
             return false;

@@ -17,7 +17,6 @@ using Microsoft.Azure.Functions.Worker.Handlers;
 using Microsoft.Azure.Functions.Worker.Invocation;
 using Microsoft.Azure.Functions.Worker.Rpc;
 using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using MsgType = Microsoft.Azure.Functions.Worker.Grpc.Messages.StreamingMessage.ContentOneofCase;
 
@@ -186,7 +185,6 @@ namespace Microsoft.Azure.Functions.Worker
 
                     response.FunctionMetadataResults.Add(rpcFuncMetadata);
                 }
-
             }
             catch (Exception ex)
             {
@@ -232,12 +230,12 @@ namespace Microsoft.Azure.Functions.Worker
             if (retry.Strategy is RetryStrategy.FixedDelay)
             {
                 rpcRetryOptions.RetryStrategy = RpcRetryOptions.Types.RetryStrategy.FixedDelay;
-                rpcRetryOptions.DelayInterval = Duration.FromTimeSpan((TimeSpan) retry.DelayInterval!);
+                rpcRetryOptions.DelayInterval = Duration.FromTimeSpan((TimeSpan)retry.DelayInterval!);
             }
             else if (retry.Strategy is RetryStrategy.ExponentialBackoff)
             {
                 rpcRetryOptions.RetryStrategy = RpcRetryOptions.Types.RetryStrategy.ExponentialBackoff;
-                rpcRetryOptions.MaximumInterval = Duration.FromTimeSpan((TimeSpan) retry.MaximumInterval!);
+                rpcRetryOptions.MaximumInterval = Duration.FromTimeSpan((TimeSpan)retry.MaximumInterval!);
                 rpcRetryOptions.MinimumInterval = Duration.FromTimeSpan((TimeSpan)retry.MinimumInterval!);
             }
             else

@@ -3,7 +3,6 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.Diagnostics;
 
 namespace Microsoft.Azure.Functions.Worker.Sdk.Generators.FunctionActivator
 {
@@ -22,7 +21,7 @@ namespace Microsoft.Azure.Functions.Worker.Sdk.Generators.FunctionActivator
 
             var model = allModels
                 .Collect()
-                .Combine(context.AnalyzerConfigOptionsProvider);
+                .Combine(AnalyzerConfigurationProvider.Load(context));
 
             context.RegisterSourceOutput(
                 model,
@@ -30,12 +29,12 @@ namespace Microsoft.Azure.Functions.Worker.Sdk.Generators.FunctionActivator
                 {
                     var (src, analyzer) = data;
 
-                    if (!analyzer.IsRunningInAzureFunctionProject())
+                    if (!analyzer.IsRunningInAzureFunctionProject)
                     {
                         return;
                     }
 
-                    if (!analyzer.ShouldExecuteGeneration())
+                    if (!analyzer.ShouldExecuteGeneration)
                     {
                         return;
                     }
@@ -58,8 +57,6 @@ namespace Microsoft.Azure.Functions.Worker.Sdk.Generators.FunctionActivator
                         return;
                     }
 
-                    var namespaceString = GetNamespace(analyzer);
-
                     ctx.AddSource(
                         "GeneratedFunctionActivator.g.cs",
                         $$"""
@@ -68,7 +65,7 @@ namespace Microsoft.Azure.Functions.Worker.Sdk.Generators.FunctionActivator
                         using Microsoft.Extensions.DependencyInjection;
                         using Microsoft.Extensions.Hosting;
 
-                        namespace {{namespaceString}}
+                        namespace {{analyzer.NamespaceOfGeneratedCode}}
                         {
                             internal sealed class GeneratedFunctionActivator : IFunctionActivator
                             {
@@ -110,7 +107,7 @@ namespace Microsoft.Azure.Functions.Worker.Sdk.Generators.FunctionActivator
                                     {
                                         s{{BuildInjectionOfFunctionClasses(uniqueClasses)}};
 
-                                        s.AddSingleton<global::Microsoft.Azure.Functions.Worker.IFunctionActivator, global::{{namespaceString}}.GeneratedFunctionActivator>();
+                                        s.AddSingleton<global::Microsoft.Azure.Functions.Worker.IFunctionActivator, global::{{analyzer.NamespaceOfGeneratedCode}}.GeneratedFunctionActivator>();
                                     });
                                 }
                             }
@@ -150,17 +147,6 @@ namespace Microsoft.Azure.Functions.Worker.Sdk.Generators.FunctionActivator
             return builder.ToString();
         }
 
-        private static string GetNamespace(AnalyzerConfigOptionsProvider analyzer)
-        {
-            analyzer.GlobalOptions.TryGetValue(
-                Constants.BuildProperties.GeneratedCodeNamespace,
-                out var namespaceValue);
-
-            return string.IsNullOrWhiteSpace(namespaceValue)
-                ? "SourceGenerated"
-                : namespaceValue!;
-        }
-
         private static Model GetModel(
             GeneratorAttributeSyntaxContext context,
             CancellationToken token)
@@ -168,14 +154,14 @@ namespace Microsoft.Azure.Functions.Worker.Sdk.Generators.FunctionActivator
             var model = new Model();
             if (context.Attributes.Length != 1)
             {
-                AddInconclusiveDiagnostic(context, model);
+                AddInconclusiveDiagnostic(context, model, "FunctionAttribute");
                 return model;
             }
 
             var attribute = context.Attributes.First();
             if (context.TargetSymbol is not IMethodSymbol methodSymbol)
             {
-                AddInconclusiveDiagnostic(context, model);
+                AddInconclusiveDiagnostic(context, model, "FunctionAttribute");
                 return model;
             }
 
@@ -204,11 +190,15 @@ namespace Microsoft.Azure.Functions.Worker.Sdk.Generators.FunctionActivator
             return model;
         }
 
-        private static void AddInconclusiveDiagnostic(GeneratorAttributeSyntaxContext context, Model model)
+        private static void AddInconclusiveDiagnostic(
+            GeneratorAttributeSyntaxContext context,
+            Model model,
+            string attributeName)
         {
             model.Diagnostics.Add(Diagnostic.Create(
                 DiagnosticDescriptors.InconclusiveAttribute,
-                context.TargetNode?.GetLocation() ?? Location.None));
+                context.TargetNode?.GetLocation() ?? Location.None,
+                new[] { attributeName }));
         }
 
         private record FunctionDeclaration

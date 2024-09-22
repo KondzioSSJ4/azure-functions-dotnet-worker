@@ -57,7 +57,8 @@ namespace Microsoft.Azure.Functions.Worker.Sdk.Generators
             internal const string IEnumerableOfKeyValuePair = "System.Collections.Generic.IEnumerable`1<System.Collections.Generic.KeyValuePair`2<TKey,TValue>>";
         }
 
-        internal static class FunctionMetadataBindingProps {
+        internal static class FunctionMetadataBindingProps
+        {
             internal const string ReturnBindingName = "$return";
             internal const string HttpResponseBindingName = "HttpResponse";
             internal const string IsBatchedKey = "IsBatched";

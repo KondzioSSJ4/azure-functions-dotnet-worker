@@ -21,5 +21,15 @@ namespace AspNetIntegration
                 FileDownloadName = BlobName
             };
         }
+
+        [Function("FileDownload2")]
+        public IActionResult Run2([HttpTrigger(AuthorizationLevel.Function, "get", "post")] HttpRequest req,
+            [BlobInput($"{BlobContainer}/{BlobName}")] Stream blobStream)
+        {
+            return new FileStreamResult(blobStream, "application/octet-stream")
+            {
+                FileDownloadName = BlobName
+            };
+        }
     }
 }

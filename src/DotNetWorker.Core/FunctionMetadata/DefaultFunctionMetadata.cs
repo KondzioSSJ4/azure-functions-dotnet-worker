@@ -6,6 +6,93 @@ using System.Collections.Generic;
 
 namespace Microsoft.Azure.Functions.Worker.Core.FunctionMetadata
 {
+    public enum FunctionBindingDirection
+    {
+        In = 1,
+        Out,
+        InOut
+    }
+
+    public interface IGeneratedBinding
+    {
+        string Name { get; }
+        FunctionBindingDirection Direction { get; }
+        string? BindingType { get; }
+        string? DataType { get; }
+        IReadOnlyDictionary<string, string> Properties { get; }
+    }
+
+    public sealed class DefaultGeneratedBinding : IGeneratedBinding
+    {
+        public DefaultGeneratedBinding(
+            string name,
+            FunctionBindingDirection direction,
+            string? bindingType,
+            string? dataType,
+            IReadOnlyDictionary<string, string> properties)
+        {
+            Name = name;
+            Direction = direction;
+            BindingType = bindingType;
+            DataType = dataType;
+            Properties = properties;
+        }
+
+        public string Name { get; }
+
+        public FunctionBindingDirection Direction { get; }
+
+        public string? BindingType { get; }
+
+        public string? DataType { get; }
+
+        public IReadOnlyDictionary<string, string> Properties { get; }
+    }
+
+    public interface IGeneratedFunctionMetadata : IFunctionMetadata
+    {
+        IReadOnlyCollection<IGeneratedBinding> GeneratedBindings { get; }
+    }
+
+    public sealed class SourceGeneratedFunctionMetadata : IGeneratedFunctionMetadata
+    {
+        public SourceGeneratedFunctionMetadata(
+            string? functionId,
+            bool isProxy,
+            string? language,
+            bool managedDependencyEnabled,
+            string? name,
+            string? entryPoint,
+            string? scriptFile,
+            IRetryOptions? retry,
+            IList<string>? rawBindings,
+            IReadOnlyCollection<IGeneratedBinding> generatedBindings)
+        {
+            FunctionId = functionId;
+            IsProxy = isProxy;
+            Language = language;
+            ManagedDependencyEnabled = managedDependencyEnabled;
+            Name = name;
+            EntryPoint = entryPoint;
+            RawBindings = rawBindings;
+            ScriptFile = scriptFile;
+            Retry = retry;
+            GeneratedBindings = generatedBindings;
+        }
+
+        public string? FunctionId { get; }
+        public bool IsProxy { get; }
+        public string? Language { get; }
+        public bool ManagedDependencyEnabled { get; }
+        public string? Name { get; }
+        public string? EntryPoint { get; }
+        public IList<string>? RawBindings { get; }
+        public string? ScriptFile { get; }
+        public IRetryOptions? Retry { get; }
+
+        public IReadOnlyCollection<IGeneratedBinding> GeneratedBindings { get; }
+    }
+
     /// <summary>
     /// Local representation of FunctionMetadata
     /// </summary>

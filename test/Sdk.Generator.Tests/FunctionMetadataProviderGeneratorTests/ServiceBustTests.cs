@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Reflection;
-using System.Text;
+﻿using System.Reflection;
 using System.Threading.Tasks;
 using Microsoft.Azure.Functions.Worker.Sdk.Generators;
 using Microsoft.CodeAnalysis.CSharp;
@@ -74,7 +70,6 @@ namespace Microsoft.Azure.Functions.SdkGeneratorTests
                     }
                 }
                 """;
-
 
                 string expectedGeneratedFileName = $"GeneratedFunctionMetadataProvider.g.cs";
                 string expectedOutput = """

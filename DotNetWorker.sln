@@ -36,6 +36,7 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{42CB3DE7-B070-4BA1-8A7A-ACB237BEAA4E}"
 	ProjectSection(SolutionItems) = preProject
 		.editorconfig = .editorconfig
+		sdk\Sdk.Generators\FunctionsUtil.cs = sdk\Sdk.Generators\FunctionsUtil.cs
 	EndProjectSection
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "TestUtility", "test\TestUtility\TestUtility.csproj", "{C30B77A7-4085-422E-AADE-A4322989F5F8}"
@@ -148,7 +149,7 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DotNetWorker.OpenTelemetry.
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Worker.Extensions.Timer.Tests", "test\extensions\Worker.Extensions.Timer.Tests\Worker.Extensions.Timer.Tests.csproj", "{6947034E-C97F-4F78-940F-B6A398E23C9C}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Worker.Extensions.Http.AspNetCore.Analyzers", "extensions\Worker.Extensions.Http.AspNetCore.Analyzers\src\Worker.Extensions.Http.AspNetCore.Analyzers.csproj", "{63C70590-7F4A-4D54-9157-7FEDE0F8650D}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Worker.Extensions.Http.AspNetCore.Analyzers", "extensions\Worker.Extensions.Http.AspNetCore.Analyzers\src\Worker.Extensions.Http.AspNetCore.Analyzers.csproj", "{63C70590-7F4A-4D54-9157-7FEDE0F8650D}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

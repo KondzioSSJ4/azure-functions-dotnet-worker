@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -26,6 +27,45 @@ namespace Microsoft.Azure.Functions.SdkGeneratorTests.Helpers
         private static readonly TimeSpan _executionMaxTime = TimeSpan.FromSeconds(30);
 
         public static async Task RunAndVerify(
+            this GeneratorDriver driver,
+            string inputSource,
+            IEnumerable<Assembly>? extensionAssemblyReferences = null,
+            IDictionary<string, string>? buildPropertiesDictionary = null,
+            string? generatedCodeNamespace = null,
+            LanguageVersion? languageVersion = null,
+            bool runInsideAzureFunctionProject = true,
+            string? paramsNames = "",
+            [CallerFilePath] string callerFileName = "",
+            [CallerMemberName] string callerName = "")
+        {
+            using var cts = new CancellationTokenSource();
+#if !DEBUG
+            cts.CancelAfter(_executionMaxTime);
+#endif
+
+            var compilation = CreateCompilation(inputSource, extensionAssemblyReferences, languageVersion);
+            if (!AssertDiagnostics(compilation))
+            {
+                return;
+            }
+
+            var config = CreateAnalyzerOptions(
+                buildPropertiesDictionary,
+                generatedCodeNamespace,
+                runInsideAzureFunctionProject);
+
+            cts.Token.ThrowIfCancellationRequested();
+            driver = driver
+                .WithUpdatedAnalyzerConfigOptions(config);
+
+            var generateResult = driver.RunGenerators(compilation, cts.Token);
+            cts.Token.ThrowIfCancellationRequested();
+
+            await VerifyGeneratedCode(generateResult, callerFileName, callerName, paramsNames);
+            await AssertDiagnosticsOfGeneratedCode(languageVersion, compilation, generateResult, cts.Token);
+        }
+
+        public static Task RunAndVerify(
             this IIncrementalGenerator sourceGenerator,
             string inputSource,
             IEnumerable<Assembly>? extensionAssemblyReferences = null,
@@ -33,37 +73,24 @@ namespace Microsoft.Azure.Functions.SdkGeneratorTests.Helpers
             string? generatedCodeNamespace = null,
             LanguageVersion? languageVersion = null,
             bool runInsideAzureFunctionProject = true,
+            string? paramsNames = "",
             [CallerFilePath] string callerFileName = "",
             [CallerMemberName] string callerName = "")
         {
-            using var cts = new CancellationTokenSource();
-#if !DEBUG
-            cts.CancelAfter(_executionMaxTime);
-#endif
-
-            var compilation = CreateCompilation(inputSource, extensionAssemblyReferences, languageVersion);
-            if (!AssertDiagnostics(compilation))
-            {
-                return;
-            }
-
-            var config = CreateAnalyzerOptions(
-                buildPropertiesDictionary,
-                generatedCodeNamespace,
-                runInsideAzureFunctionProject);
-
-            cts.Token.ThrowIfCancellationRequested();
-            var driver = CSharpGeneratorDriver.Create(sourceGenerator)
-                .WithUpdatedAnalyzerConfigOptions(config);
-
-            var generateResult = driver.RunGenerators(compilation, cts.Token);
-            cts.Token.ThrowIfCancellationRequested();
-
-            await AssertDiagnosticsOfGeneratedCode(languageVersion, compilation, generateResult, cts.Token);
-            await VerifyGeneratedCode(generateResult, callerFileName, callerName);
+            return CSharpGeneratorDriver.Create(sourceGenerator)
+                .RunAndVerify(
+                    inputSource,
+                    extensionAssemblyReferences,
+                    buildPropertiesDictionary,
+                    generatedCodeNamespace,
+                    languageVersion,
+                    runInsideAzureFunctionProject,
+                    paramsNames,
+                    callerFileName,
+                    callerName);
         }
 
-        public static async Task RunAndVerify(
+        public static Task RunAndVerify(
             this ISourceGenerator sourceGenerator,
             string inputSource,
             IEnumerable<Assembly>? extensionAssemblyReferences = null,
@@ -71,34 +98,21 @@ namespace Microsoft.Azure.Functions.SdkGeneratorTests.Helpers
             string? generatedCodeNamespace = null,
             LanguageVersion? languageVersion = null,
             bool runInsideAzureFunctionProject = true,
+            string? paramsNames = "",
             [CallerFilePath] string callerFileName = "",
             [CallerMemberName] string callerName = "")
         {
-            using var cts = new CancellationTokenSource();
-#if !DEBUG
-            cts.CancelAfter(_executionMaxTime);
-#endif
-
-            var compilation = CreateCompilation(inputSource, extensionAssemblyReferences, languageVersion);
-            if (!AssertDiagnostics(compilation))
-            {
-                return;
-            }
-
-            var config = CreateAnalyzerOptions(
-                buildPropertiesDictionary,
-                generatedCodeNamespace,
-                runInsideAzureFunctionProject);
-
-            cts.Token.ThrowIfCancellationRequested();
-            var driver = CSharpGeneratorDriver.Create(sourceGenerator)
-                .WithUpdatedAnalyzerConfigOptions(config);
-
-            var generateResult = driver.RunGenerators(compilation, cts.Token);
-            cts.Token.ThrowIfCancellationRequested();
-
-            await AssertDiagnosticsOfGeneratedCode(languageVersion, compilation, generateResult, cts.Token);
-            await VerifyGeneratedCode(generateResult, callerFileName, callerName);
+            return CSharpGeneratorDriver.Create(sourceGenerator)
+                .RunAndVerify(
+                    inputSource,
+                    extensionAssemblyReferences,
+                    buildPropertiesDictionary,
+                    generatedCodeNamespace,
+                    languageVersion,
+                    runInsideAzureFunctionProject,
+                    paramsNames,
+                    callerFileName,
+                    callerName);
         }
 
         private static async Task AssertDiagnosticsOfGeneratedCode(
@@ -152,29 +166,58 @@ namespace Microsoft.Azure.Functions.SdkGeneratorTests.Helpers
         private static SettingsTask VerifyGeneratedCode(
             GeneratorDriver generateResult,
             string callerFileName,
-            string callerName)
+            string callerName,
+            string? paramsNames)
         {
             return Configure(
                 Verifier.Verify(generateResult),
                 callerFileName,
-                callerName);
+                callerName,
+                paramsNames);
         }
 
         private static SettingsTask Configure(
             SettingsTask settings,
             string callerFileName,
-            string callerName)
+            string callerName,
+            string? paramsNames)
         {
             settings = settings.DisableRequireUniquePrefix();
 
             if (!string.IsNullOrWhiteSpace(callerFileName))
             {
+                var fileName = $"{Path.GetFileNameWithoutExtension(callerFileName)}.{callerName}";
+                if (!string.IsNullOrWhiteSpace(paramsNames))
+                {
+                    fileName = $"{fileName}_{paramsNames}";
+                }
+
+                fileName = RemoveInvalidFileChars(fileName);
+
                 settings = settings
                     .UseDirectory(Path.GetDirectoryName(callerFileName))
-                    .UseFileName($"{Path.GetFileNameWithoutExtension(callerFileName)}.{callerName}");
+                    .UseFileName(fileName);
+            }
+
+            if (!string.IsNullOrWhiteSpace(paramsNames))
+            {
+                settings = settings
+                    .UseTextForParameters(paramsNames);
             }
 
             return settings;
+        }
+
+        private static string RemoveInvalidFileChars(string fileName)
+        {
+            var invalidChars = Path.GetInvalidFileNameChars();
+
+            fileName = new string(fileName
+                .Replace("<", "[")
+                .Replace(">", "]")
+                .Where(x => !invalidChars.Contains(x))
+                .ToArray());
+            return fileName;
         }
 
         private static AnalyzerConfigOptions CreateAnalyzerOptions(

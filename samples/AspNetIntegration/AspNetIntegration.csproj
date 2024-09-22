@@ -8,7 +8,9 @@
   </PropertyGroup>
     
   <ItemGroup>
-    <PackageReference Include="Microsoft.Azure.Functions.Worker.Sdk" Version="1.17.4" />
+    <PackageReference Include="Microsoft.Azure.Functions.Worker.Sdk" Version="50.0.0" />
+    <PackageReference Include="Microsoft.Azure.Functions.Worker.Sdk.Analyzers" Version="50.0.0" />
+    <PackageReference Include="Microsoft.Azure.Functions.Worker.Sdk.Generators" Version="50.0.0" />
   </ItemGroup>
   
   <ItemGroup>

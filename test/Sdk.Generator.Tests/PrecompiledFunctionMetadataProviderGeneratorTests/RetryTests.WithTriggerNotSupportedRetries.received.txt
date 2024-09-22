@@ -1,0 +1,15 @@
+﻿{
+  Diagnostics: [
+    {
+      Id: AZFW0012,
+      Title: Invalid operation with a retry attribute.,
+      Severity: Error,
+      WarningLevel: 0,
+      Location: : (0,0)-(0,0),
+      HelpLink: https://aka.ms/azfw-rules?ruleid=AZFW0012,
+      MessageFormat: Invalid use of a retry attribute. Check that the attribute is used on a trigger that supports function-level retry.,
+      Message: Invalid use of a retry attribute. Check that the attribute is used on a trigger that supports function-level retry.,
+      Category: FunctionMetadataGeneration
+    }
+  ]
+}
