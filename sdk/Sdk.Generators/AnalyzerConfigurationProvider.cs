@@ -4,7 +4,7 @@ using Microsoft.CodeAnalysis.Diagnostics;
 
 namespace Microsoft.Azure.Functions.Worker.Sdk.Generators
 {
-    internal sealed record AnalyzerConfigurationProvider
+    public sealed record AnalyzerConfigurationProvider
     {
         public AnalyzerConfigurationProvider(
             bool isRunningInAzureFunctionProject,

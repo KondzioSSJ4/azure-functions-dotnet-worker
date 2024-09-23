@@ -3,7 +3,7 @@
 
 namespace Microsoft.Azure.Functions.Worker.Sdk.Generators
 {
-    internal enum DataType
+    public enum DataType
     {
         Undefined,
         Binary,
