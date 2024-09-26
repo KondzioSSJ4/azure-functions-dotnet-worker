@@ -1,9 +1,10 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using Microsoft.CodeAnalysis;
 
-namespace Microsoft.Azure.Functions.Worker.Sdk.Generators.PrecompiledFunctionMetadataProviderGenerator
+namespace Microsoft.Azure.Functions.Worker.Sdk.Generators.MetadataGenerator
 {
     [DebuggerDisplay("{ToString()}")]
     public sealed record ParsedType
@@ -11,13 +12,25 @@ namespace Microsoft.Azure.Functions.Worker.Sdk.Generators.PrecompiledFunctionMet
         private const string TaskClass = "System.Threading.Tasks.Task";
         private const string ValueTaskClass = "System.Threading.Tasks.ValueTask";
         private const string StringClass = "string";
+        private static readonly ISet<string> AllowedByteTypes = new HashSet<string>
+        {
+            "byte",
+            "byte[]",
+            "byte[][]",
+            "System.ReadOnlyMemory<byte>"
+        };
+
+        private static readonly IReadOnlyCollection<string> AllowedStringTypes = new HashSet<string>
+        {
+            StringClass,
+            "string[]"
+        };
 
         private ParsedType(
             string? type,
             string? asyncWrapper,
             bool isEnumerable,
-            bool isAsyncEnumerable,
-            bool isBinary)
+            bool isAsyncEnumerable)
         {
             var hasAsync = !string.IsNullOrWhiteSpace(asyncWrapper);
             var hasType = !string.IsNullOrWhiteSpace(type);
@@ -47,9 +60,9 @@ namespace Microsoft.Azure.Functions.Worker.Sdk.Generators.PrecompiledFunctionMet
                 IsAwaitable = false;
             }
 
+            IsAsyncOperation = !string.IsNullOrEmpty(asyncWrapper);
             IsEnumerable = isEnumerable;
             IsAsyncEnumerable = isAsyncEnumerable;
-            IsBinary = isBinary;
         }
 
         public string RawType { get; } = default!;
@@ -57,7 +70,7 @@ namespace Microsoft.Azure.Functions.Worker.Sdk.Generators.PrecompiledFunctionMet
         public bool IsAwaitable { get; }
         public bool IsEnumerable { get; }
         public bool IsAsyncEnumerable { get; }
-        public bool IsBinary { get; }
+        public bool IsAsyncOperation { get; }
 
         public override string ToString()
             => FullType;
@@ -75,10 +88,10 @@ namespace Microsoft.Azure.Functions.Worker.Sdk.Generators.PrecompiledFunctionMet
             var fullName = symbol.ToString();
             type = fullName switch
             {
-                TaskClass => new ParsedType(null, TaskClass, false, false, false),
-                ValueTaskClass => new ParsedType(null, ValueTaskClass, false, false, false),
-                "void" => new ParsedType("void", null, false, false, false),
-                StringClass => new ParsedType(StringClass, null, false, false, false),
+                TaskClass => new ParsedType(null, TaskClass, false, false),
+                ValueTaskClass => new ParsedType(null, ValueTaskClass, false, false),
+                "void" => new ParsedType("void", null, false, false),
+                StringClass => new ParsedType(StringClass, null, false, false),
                 _ => null
             };
 
@@ -87,17 +100,8 @@ namespace Microsoft.Azure.Functions.Worker.Sdk.Generators.PrecompiledFunctionMet
                 return true;
             }
 
-            if (symbol is not INamedTypeSymbol namedSymbol)
-            {
-                diagnostic = Diagnostic.Create(
-                    DiagnosticDescriptors.SymbolNotFound,
-                    symbol.Locations.FirstOrDefault() ?? Location.None,
-                    new[] { "INamedTypeSymbol" });
-                return false;
-            }
-
-            type = TryParse(fullName, TaskClass, namedSymbol, out rawOutputSymbol)
-                ?? TryParse(fullName, ValueTaskClass, namedSymbol, out rawOutputSymbol);
+            type = TryParse(fullName, TaskClass, symbol, out rawOutputSymbol)
+                ?? TryParse(fullName, ValueTaskClass, symbol, out rawOutputSymbol);
             if (type is not null)
             {
                 if (type.IsAsyncEnumerable)
@@ -114,24 +118,18 @@ namespace Microsoft.Azure.Functions.Worker.Sdk.Generators.PrecompiledFunctionMet
 
             var isEnumerable = HasEnumerableInterface(symbol);
             var isAsyncEnumerable = HasAsyncEnumerableInterface(symbol);
-            var isBinary = IsOrDerivesFromBinaryType(symbol);
-            type = new ParsedType(fullName, null, isEnumerable, isAsyncEnumerable, isBinary);
+            type = new ParsedType(fullName, null, isEnumerable, isAsyncEnumerable);
             return type is not null;
-        }
-
-        private static bool IsOrDerivesFromBinaryType(ITypeSymbol symbol)
-        {
-            throw new NotImplementedException();
         }
 
         public DataType GetGeneratorDataType()
         {
-            if (RawType == StringClass)
+            if (AllowedStringTypes.Contains(RawType))
             {
                 return DataType.String;
             }
 
-            if (IsBinary)
+            if (AllowedByteTypes.Contains(RawType))
             {
                 return DataType.Binary;
             }
@@ -142,7 +140,7 @@ namespace Microsoft.Azure.Functions.Worker.Sdk.Generators.PrecompiledFunctionMet
         private static ParsedType? TryParse(
             string parsedType,
             string type,
-            INamedTypeSymbol symbol,
+            ITypeSymbol symbol,
             out ITypeSymbol innerTypeSymbol)
         {
             innerTypeSymbol = null;
@@ -153,7 +151,7 @@ namespace Microsoft.Azure.Functions.Worker.Sdk.Generators.PrecompiledFunctionMet
                 return null;
             }
 
-            for (int i = 0; i < type.Length; i++)
+            for (var i = 0; i < type.Length; i++)
             {
                 if (parsedType[i] != type[i])
                 {
@@ -162,11 +160,10 @@ namespace Microsoft.Azure.Functions.Worker.Sdk.Generators.PrecompiledFunctionMet
             }
 
             var innerType = parsedType.Substring(type.Length + 1, parsedType.Length - type.Length - 2);
-            innerTypeSymbol = symbol.TypeArguments.Single();
+            innerTypeSymbol = ((INamedTypeSymbol)symbol).TypeArguments.Single();
             var isEnumerable = HasEnumerableInterface(innerTypeSymbol);
             var isAsyncEnumerable = HasAsyncEnumerableInterface(innerTypeSymbol);
-            var isBinary = IsOrDerivesFromBinaryType(innerTypeSymbol);
-            return new ParsedType(innerType, type, isEnumerable, isAsyncEnumerable, isBinary);
+            return new ParsedType(innerType, type, isEnumerable, isAsyncEnumerable);
         }
 
         private static bool HasAsyncEnumerableInterface(ITypeSymbol type)
@@ -175,12 +172,17 @@ namespace Microsoft.Azure.Functions.Worker.Sdk.Generators.PrecompiledFunctionMet
             const string ExpectedNamespace = "System.Collections.Generic";
 
             return type is not null
-                && ((type.Name == ExpectedName && type.ContainingNamespace.ToString() == ExpectedNamespace)
+                && (type.Name == ExpectedName && type.ContainingNamespace.ToString() == ExpectedNamespace
                     || type.AllInterfaces.Any(x => x.IsGenericType && x.Name == ExpectedName && x.ContainingNamespace.ToString() == ExpectedNamespace));
         }
 
         private static bool HasEnumerableInterface(ITypeSymbol symbol)
         {
+            if (symbol.TypeKind == TypeKind.Array)
+            {
+                return true;
+            }
+
             return symbol is not null
                 && symbol.AllInterfaces.Any(x => x.Name == "IEnumerable"
                     && x.ToString() == "System.Collections.IEnumerable");

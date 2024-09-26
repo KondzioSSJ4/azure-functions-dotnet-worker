@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using Microsoft.CodeAnalysis;
 
-namespace Microsoft.Azure.Functions.Worker.Sdk.Generators.PrecompiledFunctionMetadataProviderGenerator
+namespace Microsoft.Azure.Functions.Worker.Sdk.Generators.MetadataGenerator
 {
     public sealed class BindingDeclarationEmiter : IPrecompiledFunctionMetadataEmiter
     {
@@ -127,9 +127,9 @@ namespace Microsoft.Azure.Functions.Worker.Sdk.Generators.PrecompiledFunctionMet
                 unchecked
                 {
                     uint hash = 23;
-                    foreach (char c in value)
+                    foreach (var c in value)
                     {
-                        hash = (hash * 31) + c;
+                        hash = hash * 31 + c;
                     }
 
                     return hash;
@@ -138,7 +138,7 @@ namespace Microsoft.Azure.Functions.Worker.Sdk.Generators.PrecompiledFunctionMet
 
             unchecked
             {
-                bool atLeastOnePresent = false;
+                var atLeastOnePresent = false;
                 uint hash = 17;
 
                 if (functionName is not null)

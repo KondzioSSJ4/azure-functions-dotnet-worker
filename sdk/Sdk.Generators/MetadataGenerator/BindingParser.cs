@@ -3,10 +3,10 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using Microsoft.Azure.Functions.Worker.Sdk.Generators.Extensions;
-using Microsoft.Azure.Functions.Worker.Sdk.Generators.PrecompiledFunctionMetadataProviderGenerator.BindingGenerator;
+using Microsoft.Azure.Functions.Worker.Sdk.Generators.MetadataGenerator.BindingGenerator;
 using Microsoft.CodeAnalysis;
 
-namespace Microsoft.Azure.Functions.Worker.Sdk.Generators.PrecompiledFunctionMetadataProviderGenerator
+namespace Microsoft.Azure.Functions.Worker.Sdk.Generators.MetadataGenerator
 {
     internal sealed class BindingParser
     {
@@ -193,7 +193,7 @@ namespace Microsoft.Azure.Functions.Worker.Sdk.Generators.PrecompiledFunctionMet
                     IGenerateableBindingGenerator bindingGenerator = attributeName switch
                     {
                         //"HttpTriggerAttribute" => new BindingGenerator.Http.HttpTriggerParser(_functionMethodSymbol, attribute, parameter),
-                        _ => new BindingGenerator.Defaults.DefaultTriggerParser(_functionMethodSymbol, attribute, parameter)
+                        _ => new BindingGenerator.Defaults.DefaultTriggerParser(_functionMethodSymbol, _semanticModel, attribute, parameter)
                     };
 
                     var bindings = bindingGenerator?.Generate(_cancellationToken).ToArray() ?? Array.Empty<IGenerateableBinding>();

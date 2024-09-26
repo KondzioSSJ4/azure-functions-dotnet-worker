@@ -7,7 +7,7 @@ using Microsoft.Azure.Functions.Worker.Sdk.Generators.Extensions;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
-namespace Microsoft.Azure.Functions.Worker.Sdk.Generators.PrecompiledFunctionMetadataProviderGenerator
+namespace Microsoft.Azure.Functions.Worker.Sdk.Generators.MetadataGenerator
 {
     [Generator]
     public sealed class PrecompiledFunctionMetadataProviderGenerator : IIncrementalGenerator

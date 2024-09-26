@@ -8,6 +8,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Collections.Immutable;
+using Microsoft.Azure.Functions.Worker.Sdk.Generators.Extensions;
 
 namespace Microsoft.Azure.Functions.Worker.Sdk.Generators
 {

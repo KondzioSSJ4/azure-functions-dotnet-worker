@@ -1,9 +1,9 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
-using Microsoft.Azure.Functions.Worker.Sdk.Generators.PrecompiledFunctionMetadataProviderGenerator.BindingGenerator;
+using Microsoft.Azure.Functions.Worker.Sdk.Generators.MetadataGenerator.BindingGenerator;
 using Microsoft.CodeAnalysis;
 
-namespace Microsoft.Azure.Functions.Worker.Sdk.Generators.PrecompiledFunctionMetadataProviderGenerator
+namespace Microsoft.Azure.Functions.Worker.Sdk.Generators.MetadataGenerator
 {
     public sealed record FunctionDeclaration
     {

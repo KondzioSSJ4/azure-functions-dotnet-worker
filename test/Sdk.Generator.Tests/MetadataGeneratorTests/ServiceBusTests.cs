@@ -244,7 +244,7 @@ namespace Microsoft.Azure.Functions.SdkGeneratorTests.PrecompiledFunctionMetadat
             string parameterNames = null,
             [CallerMemberName] string callerName = "")
         {
-            await new Worker.Sdk.Generators.PrecompiledFunctionMetadataProviderGenerator.PrecompiledFunctionMetadataProviderGenerator()
+            await new Worker.Sdk.Generators.MetadataGenerator.PrecompiledFunctionMetadataProviderGenerator()
             //await new Worker.Sdk.Generators.FunctionMetadataProviderGenerator()
                 .RunAndVerify(
                     sourceCode,

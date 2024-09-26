@@ -3,13 +3,15 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.CompilerServices;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 using Microsoft.Azure.Functions.SdkGeneratorTests.Helpers;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Extensions.Abstractions;
 using Microsoft.Azure.Functions.Worker.Sdk.Generators;
-using Microsoft.Azure.Functions.Worker.Sdk.Generators.PrecompiledFunctionMetadataProviderGenerator;
-using Microsoft.Azure.Functions.Worker.Sdk.Generators.PrecompiledFunctionMetadataProviderGenerator.BindingGenerator;
+using Microsoft.Azure.Functions.Worker.Sdk.Generators.MetadataGenerator;
+using Microsoft.Azure.Functions.Worker.Sdk.Generators.MetadataGenerator.BindingGenerator;
 using Microsoft.CodeAnalysis;
 using Xunit;
 
@@ -17,75 +19,90 @@ namespace Microsoft.Azure.Functions.SdkGeneratorTests.PrecompiledFunctionMetadat
 {
     public class DefaultTriggerBindingTests
     {
-        private class TriggerDeclaredTypeEmiter : IPrecompiledFunctionMetadataEmiter
+        private class StoreDataEmiter<T> : IPrecompiledFunctionMetadataEmiter
         {
             private readonly BindingType _expectedType;
+            private readonly Func<IGenerateableBinding, T> _funcStore;
 
-            public DataType? Type { get; private set; }
-
-            public TriggerDeclaredTypeEmiter(
-                BindingType expectedType)
+            public StoreDataEmiter(
+                BindingType expectedType,
+                Func<IGenerateableBinding, T> funcStore)
             {
                 _expectedType = expectedType;
+                _funcStore = funcStore;
             }
+
+            public T? StoredValue { get; private set; }
 
             public void Emit(
                 SourceProductionContext ctx,
                 IReadOnlyCollection<FunctionDeclaration> src,
                 AnalyzerConfigurationProvider analyzer)
             {
-                var bindingType = src
+                var value = src
                     .SelectMany(x => x.Bindings)
                     .Where(x => x.BindingType == _expectedType)
-                    .Select(x => new { x.RawType })
-                    .FirstOrDefault()?.RawType;
-
-                Type = bindingType?.GetGeneratorDataType();
+                    .Select(x => _funcStore.Invoke(x))
+                    .FirstOrDefault();
+                StoredValue = value;
             }
         }
+
+        private record InputParsingResult(
+            DataType Type,
+            string? Cardinality);
 
         [Theory]
         [InlineData("string", false, DataType.String)]
         [InlineData("string[]", false, DataType.String)]
+        [InlineData("IEnumerable<string>", false, DataType.Undefined)]
+        [InlineData("IAsyncEnumerable<string>", false, DataType.Undefined)]
+        [InlineData("string", true, null)]
+        [InlineData("string[]", true, DataType.String)]
+        [InlineData("IEnumerable<string>", true, DataType.String)]
+        [InlineData("IAsyncEnumerable<string>", true, DataType.String)]
         [InlineData("byte[]", false, DataType.Binary)]
         [InlineData("byte[][]", false, DataType.Binary)]
         [InlineData("ReadOnlyMemory<byte>", false, DataType.Binary)]
         [InlineData("CustomDto", false, DataType.Undefined)]
-        [InlineData("IEnumerable<string>", false, DataType.Undefined)]
         [InlineData("IEnumerable<byte[]>", false, DataType.Undefined)]
         [InlineData("IEnumerable<CustomDto>", false, DataType.Undefined)]
-        [InlineData("IAsyncEnumerable<string>", false, DataType.Undefined)]
         [InlineData("IAsyncEnumerable<byte[]>", false, DataType.Undefined)]
         [InlineData("IAsyncEnumerable<CustomDto>", false, DataType.Undefined)]
-        [InlineData("Task<string>", false, DataType.String)]
-        [InlineData("Task<string[]>", false, DataType.String)]
-        [InlineData("Task<byte[]>", false, DataType.Binary)]
-        [InlineData("Task<CustomDto>", false, DataType.Undefined)]
-        [InlineData("ValueTask<string>", false, DataType.String)]
-        [InlineData("ValueTask<byte[]>", false, DataType.Binary)]
-        [InlineData("ValueTask<CustomDto>", false, DataType.Undefined)]
-        [InlineData("string", true, null)]
-        [InlineData("byte[]", true, null)]
+        [InlineData("byte[]", true, DataType.Binary)]
         [InlineData("CustomDto", true, null)]
-        [InlineData("IEnumerable<string>", true, DataType.String)]
         [InlineData("IEnumerable<byte[]>", true, DataType.Binary)]
         [InlineData("IEnumerable<CustomDto>", true, DataType.Undefined)]
-        [InlineData("IAsyncEnumerable<string>", true, DataType.String)]
         [InlineData("IAsyncEnumerable<byte[]>", true, DataType.Binary)]
         [InlineData("IAsyncEnumerable<CustomDto>", true, DataType.Undefined)]
+        // Task as the input trigger is not allowed
         [InlineData("Task<string>", true, null)]
+        [InlineData("Task<string[]>", true, null)]
         [InlineData("Task<byte[]>", true, null)]
         [InlineData("Task<CustomDto>", true, null)]
         [InlineData("ValueTask<string>", true, null)]
         [InlineData("ValueTask<byte[]>", true, null)]
         [InlineData("ValueTask<CustomDto>", true, null)]
+        [InlineData("Task<string>", false, null)]
+        [InlineData("Task<string[]>", false, null)]
+        [InlineData("Task<byte[]>", false, null)]
+        [InlineData("Task<CustomDto>", false, null)]
+        [InlineData("ValueTask<string>", false, null)]
+        [InlineData("ValueTask<byte[]>", false, null)]
+        [InlineData("ValueTask<CustomDto>", false, null)]
         public async Task WithDifferentInputTypes(
             string inputType,
             bool isBatched,
             DataType? expectedType)
         {
-            var emiter = new TriggerDeclaredTypeEmiter(BindingType.Trigger);
+            var emiter = new StoreDataEmiter<InputParsingResult?>(
+                BindingType.Trigger,
+                x => new InputParsingResult(
+                    x.DeclaredType,
+                    JsonSerializer.Deserialize<JsonNode>(x.ToRawBinding())["cardinality"]?.GetValue<string>()));
+
             var generator = new PrecompiledFunctionMetadataProviderGenerator(new[] { emiter });
+            //var generator = new FunctionMetadataProviderGenerator();
 
             await new SourceGeneratorValidator()
                 .WithGenerator(generator)
@@ -118,6 +135,7 @@ namespace Microsoft.Azure.Functions.SdkGeneratorTests.PrecompiledFunctionMetadat
                 }
                 """)
                 .Build()
+                //.VerifyOutput($"{inputType}_{isBatched}_{expectedType}")
                 .ValidateGeneratorDiagnostics(d =>
                 {
                     var errors = d.Where(x => x.Severity >= DiagnosticSeverity.Error);
@@ -131,7 +149,11 @@ namespace Microsoft.Azure.Functions.SdkGeneratorTests.PrecompiledFunctionMetadat
                     }
                 });
 
-            Assert.Equal(expectedType, emiter.Type);
+            Assert.Equal(expectedType, emiter.StoredValue?.Type);
+            if (emiter.StoredValue is not null)
+            {
+                Assert.Equal(isBatched ? "Many" : "One", emiter.StoredValue?.Cardinality);
+            }
         }
 
         [Theory]
@@ -296,7 +318,7 @@ namespace Microsoft.Azure.Functions.SdkGeneratorTests.PrecompiledFunctionMetadat
             IReadOnlyCollection<Assembly> additionalAssemblies = null,
             [CallerMemberName] string callerName = "")
         {
-            await new Worker.Sdk.Generators.PrecompiledFunctionMetadataProviderGenerator.PrecompiledFunctionMetadataProviderGenerator()
+            await new PrecompiledFunctionMetadataProviderGenerator()
             //await new Worker.Sdk.Generators.FunctionMetadataProviderGenerator()
                 .RunAndVerify(
                     sourceCode,

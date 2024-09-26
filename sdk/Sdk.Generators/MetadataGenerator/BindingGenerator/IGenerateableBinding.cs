@@ -2,7 +2,7 @@
 using System.Threading;
 using Microsoft.CodeAnalysis;
 
-namespace Microsoft.Azure.Functions.Worker.Sdk.Generators.PrecompiledFunctionMetadataProviderGenerator.BindingGenerator
+namespace Microsoft.Azure.Functions.Worker.Sdk.Generators.MetadataGenerator.BindingGenerator
 {
     public enum BindingType
     {
@@ -17,8 +17,8 @@ namespace Microsoft.Azure.Functions.Worker.Sdk.Generators.PrecompiledFunctionMet
         string BindingName { get; }
 
         BindingType BindingType { get; }
-        ParsedType DeclaredType { get; }
-        ParsedType RawType { get; }
+
+        DataType DeclaredType { get; }
 
         bool IsParsable { get; }
 

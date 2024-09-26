@@ -6,7 +6,7 @@ using System.Text.Json;
 using System.Threading;
 using Microsoft.CodeAnalysis;
 
-namespace Microsoft.Azure.Functions.Worker.Sdk.Generators.PrecompiledFunctionMetadataProviderGenerator.BindingGenerator.Defaults
+namespace Microsoft.Azure.Functions.Worker.Sdk.Generators.MetadataGenerator.BindingGenerator.Defaults
 {
     internal sealed class DefaultTriggerParser : IGenerateableBindingGenerator
     {
@@ -26,15 +26,18 @@ namespace Microsoft.Azure.Functions.Worker.Sdk.Generators.PrecompiledFunctionMet
         private readonly List<Diagnostic> _diagnostics = new();
 
         private readonly IMethodSymbol _functionMethodSymbol;
+        private readonly SemanticModel _semanticModel;
         private readonly AttributeData _attribute;
         private readonly IParameterSymbol _parameter;
 
         public DefaultTriggerParser(
             IMethodSymbol functionMethodSymbol,
+            SemanticModel semanticModel,
             AttributeData attribute,
             IParameterSymbol parameter)
         {
             _functionMethodSymbol = functionMethodSymbol;
+            _semanticModel = semanticModel;
             _attribute = attribute;
             _parameter = parameter;
         }
@@ -50,7 +53,7 @@ namespace Microsoft.Azure.Functions.Worker.Sdk.Generators.PrecompiledFunctionMet
                 [DirectionAttribute] = "In"
             };
 
-            for (int i = 0; i < _attribute.ConstructorArguments.Length; i++)
+            for (var i = 0; i < _attribute.ConstructorArguments.Length; i++)
             {
                 var argument = _attribute.ConstructorArguments[i];
                 var name = _attribute.AttributeConstructor!.Parameters[i].Name;
@@ -81,38 +84,144 @@ namespace Microsoft.Azure.Functions.Worker.Sdk.Generators.PrecompiledFunctionMet
                 yield break;
             }
 
-            var isBatched = ExtractIsBatchedTrigger(entries);
-            if (isBatched
-                && !declaredType.IsEnumerable
-                && !declaredType.IsAsyncEnumerable)
+            if (declaredType.IsAsyncOperation)
             {
                 _diagnostics.Add(Diagnostic.Create(
-                    DiagnosticDescriptors.InvalidCardinality,
-                    _parameter.Locations.FirstOrDefault(),
-                    new[] { declaredType.FullType }));
+                    DiagnosticDescriptors.InvalidBindingType,
+                    _parameter.Locations.FirstOrDefault() ?? _functionMethodSymbol.Locations.FirstOrDefault(),
+                    new[] { "Task, ValueTask, Task<T>, ValueTask<T>", "input trigger" }));
                 yield break;
             }
 
             var isRetrySupported = _attribute.IsRetrySupported();
+            var metadataType = declaredType.GetGeneratorDataType();
 
-            ParsedType? rawOutputType = null;
-            if (isBatched
-                && (!ParsedType.TryParse(
-                    rawOutputTypeSymbol,
-                    out rawOutputType,
-                    out _,
-                    out diagnostic)
-                    || declaredType is null))
+            var isBatched = ExtractIsBatchedTrigger(entries);
+            if (isBatched)
             {
-                _diagnostics.Add(diagnostic ?? CreateMissingSymbol(TypeAttribute));
-                yield break;
+                var returnType = rawOutputTypeSymbol ?? _parameter.Type;
+                if (declaredType.IsAsyncEnumerable)
+                {
+                    if (!UnwrapAsyncEnumerable(returnType, out metadataType, out diagnostic))
+                    {
+                        _diagnostics.Add(diagnostic ?? InvalidCardinalityDiagnostic(returnType));
+                        yield break;
+                    }
+                }
+                else if (declaredType.IsEnumerable)
+                {
+                    if (!UnwrapEnumerable(returnType, out metadataType, out diagnostic))
+                    {
+                        _diagnostics.Add(diagnostic ?? InvalidCardinalityDiagnostic(returnType));
+                        yield break;
+                    }
+                }
+                else
+                {
+                    _diagnostics.Add(InvalidCardinalityDiagnostic(returnType));
+                    yield break;
+                }
             }
 
             yield return new Binding(
                 entries,
-                declaredType,
-                rawOutputType ?? declaredType,
+                metadataType,
                 isRetrySupported);
+        }
+
+        private Diagnostic InvalidCardinalityDiagnostic(ITypeSymbol rawOutputTypeSymbol)
+        {
+            return Diagnostic.Create(
+                DiagnosticDescriptors.InvalidCardinality,
+                _parameter.Locations.FirstOrDefault(),
+                new[] { rawOutputTypeSymbol.GetFullName() });
+        }
+
+        private static bool UnwrapAsyncEnumerable(
+            ITypeSymbol typeSymbol,
+            out DataType metadataType,
+            out Diagnostic? diagnostic)
+        {
+            return UnwrapGenericCollectionInterface(typeSymbol,
+                "IAsyncEnumerable",
+                "System.Collections.Generic",
+                out metadataType,
+                out diagnostic);
+        }
+
+        private static bool UnwrapEnumerable(
+            ITypeSymbol typeSymbol,
+            out DataType metadataType,
+            out Diagnostic? diagnostic)
+        {
+            return UnwrapGenericCollectionInterface(typeSymbol,
+                "IEnumerable",
+                "System.Collections.Generic",
+                out metadataType,
+                out diagnostic);
+        }
+
+        private static bool UnwrapGenericCollectionInterface(
+            ITypeSymbol typeSymbol,
+            string genericClassName,
+            string genericClassNamespace,
+            out DataType metadataType,
+            out Diagnostic? diagnostic)
+        {
+            metadataType = DataType.Undefined;
+            diagnostic = null;
+
+            if (typeSymbol.Kind == SymbolKind.ArrayType
+                && typeSymbol is IArrayTypeSymbol arraySymbol
+                && ParsedType.TryParse(
+                    arraySymbol.ElementType,
+                    out var arrayInnerType,
+                    out _,
+                    out diagnostic))
+            {
+                metadataType = arrayInnerType?.GetGeneratorDataType() ?? DataType.Undefined;
+                return arrayInnerType is not null;
+            }
+
+            if (typeSymbol is not INamedTypeSymbol namedSymbol)
+            {
+                return false;
+            }
+
+            ParsedType? type = null;
+            foreach (var symbolInterface in new[] { namedSymbol }.Concat(namedSymbol.AllInterfaces))
+            {
+                if (symbolInterface.Name != genericClassName
+                    || !symbolInterface.IsGenericType
+                    || symbolInterface.TypeArguments.Length != 1
+                    || symbolInterface.ContainingNamespace is null
+                    || symbolInterface.ContainingNamespace.ToString() != genericClassNamespace)
+                {
+                    continue;
+                }
+
+                if (type is not null)
+                {
+                    diagnostic = Diagnostic.Create(
+                        DiagnosticDescriptors.InvalidBindingType,
+                        typeSymbol.Locations.FirstOrDefault(),
+                        new[] { $"more than 1 implementation of {genericClassName}", "batched trigger" });
+                    return false;
+                }
+
+                var innerType = symbolInterface.TypeArguments[0];
+                if (!ParsedType.TryParse(
+                    innerType,
+                    out type,
+                    out _,
+                    out diagnostic))
+                {
+                    return false;
+                }
+            }
+
+            metadataType = type?.GetGeneratorDataType() ?? DataType.Undefined;
+            return type is not null;
         }
 
         private Diagnostic CreateMissingSymbol(string missingPart)
@@ -203,13 +312,11 @@ namespace Microsoft.Azure.Functions.Worker.Sdk.Generators.PrecompiledFunctionMet
 
             public Binding(
                 Dictionary<string, string> entries,
-                ParsedType declaredType,
-                ParsedType rawType,
+                DataType declaredType,
                 bool isRetrySupported)
             {
                 _entries = entries;
                 DeclaredType = declaredType;
-                RawType = rawType;
                 IsRetrySupported = isRetrySupported;
             }
 
@@ -219,8 +326,7 @@ namespace Microsoft.Azure.Functions.Worker.Sdk.Generators.PrecompiledFunctionMet
 
             public bool IsParsable => true;
 
-            public ParsedType DeclaredType { get; }
-            public ParsedType RawType { get; }
+            public DataType DeclaredType { get; }
             public bool IsRetrySupported { get; }
 
             public string ToGeneratedBinding()
