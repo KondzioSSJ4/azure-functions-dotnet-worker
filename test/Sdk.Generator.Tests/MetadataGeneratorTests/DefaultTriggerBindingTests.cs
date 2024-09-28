@@ -15,7 +15,7 @@ using Microsoft.Azure.Functions.Worker.Sdk.Generators.MetadataGenerator.BindingG
 using Microsoft.CodeAnalysis;
 using Xunit;
 
-namespace Microsoft.Azure.Functions.SdkGeneratorTests.PrecompiledFunctionMetadataProviderGeneratorTests
+namespace Microsoft.Azure.Functions.SdkGeneratorTests.MetadataGeneratorTests
 {
     public class DefaultTriggerBindingTests
     {
@@ -102,11 +102,10 @@ namespace Microsoft.Azure.Functions.SdkGeneratorTests.PrecompiledFunctionMetadat
                     JsonSerializer.Deserialize<JsonNode>(x.ToRawBinding())["cardinality"]?.GetValue<string>()));
 
             var generator = new PrecompiledFunctionMetadataProviderGenerator(new[] { emiter });
-            //var generator = new FunctionMetadataProviderGenerator();
 
             await new SourceGeneratorValidator()
                 .WithGenerator(generator)
-                .WithAssemblies(typeof(ServiceBusTriggerAttribute).Assembly)
+                .WithAssembly(typeof(ServiceBusTriggerAttribute).Assembly)
                 .WithInput($$"""
                 using System;
                 using System.Threading;
@@ -135,7 +134,6 @@ namespace Microsoft.Azure.Functions.SdkGeneratorTests.PrecompiledFunctionMetadat
                 }
                 """)
                 .Build()
-                //.VerifyOutput($"{inputType}_{isBatched}_{expectedType}")
                 .ValidateGeneratorDiagnostics(d =>
                 {
                     var errors = d.Where(x => x.Severity >= DiagnosticSeverity.Error);
@@ -315,20 +313,21 @@ namespace Microsoft.Azure.Functions.SdkGeneratorTests.PrecompiledFunctionMetadat
         private async Task Test(
             string sourceCode,
             string parameterNames = null,
-            IReadOnlyCollection<Assembly> additionalAssemblies = null,
+            IReadOnlyCollection<Assembly>? additionalAssemblies = null,
             [CallerMemberName] string callerName = "")
         {
-            await new PrecompiledFunctionMetadataProviderGenerator()
-            //await new Worker.Sdk.Generators.FunctionMetadataProviderGenerator()
-                .RunAndVerify(
-                    sourceCode,
-                    new[]
-                    {
-                        typeof(FunctionAttribute).Assembly,
-                        typeof(Task).Assembly,
-                        typeof(TriggerBindingAttribute).Assembly
-                    }.Union(additionalAssemblies ?? Array.Empty<Assembly>()),
-                    paramsNames: parameterNames,
+            await new SourceGeneratorValidator()
+                .WithGenerator(new PrecompiledFunctionMetadataProviderGenerator())
+                .WithAssembly(
+                    typeof(TriggerBindingAttribute).Assembly,
+                    typeof(FunctionAttribute).Assembly)
+                .WithAssembly(additionalAssemblies)
+                .WithInput(sourceCode)
+                .Build()
+                .AssertDiagnosticsOfGeneratedCode()
+                .VerifySpecifiedFile(
+                    BindingDeclarationEmiter.AssemblyMetadataFile,
+                    parameters: parameterNames,
                     callerName: callerName);
         }
     }

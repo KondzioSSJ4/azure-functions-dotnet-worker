@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using Microsoft.CodeAnalysis.CSharp;
 
-namespace Microsoft.Azure.Functions.SdkGeneratorTests.PrecompiledFunctionMetadataProviderGeneratorTests
+namespace Microsoft.Azure.Functions.SdkGeneratorTests.MetadataGeneratorTests
 {
     public class SupportedLanguageTestCases : IEnumerable<object[]>
     {

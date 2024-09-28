@@ -22,7 +22,8 @@ namespace Microsoft.Azure.Functions.Worker.Sdk.Generators.MetadataGenerator
             };
         }
 
-        public PrecompiledFunctionMetadataProviderGenerator(IReadOnlyCollection<IPrecompiledFunctionMetadataEmiter> emiters)
+        public PrecompiledFunctionMetadataProviderGenerator(
+            IReadOnlyCollection<IPrecompiledFunctionMetadataEmiter> emiters)
         {
             _emiters = emiters;
         }
@@ -159,7 +160,7 @@ namespace Microsoft.Azure.Functions.Worker.Sdk.Generators.MetadataGenerator
                     continue;
                 }
 
-                if (attribute.AttributeClass.Name == "ExponentialBackoffRetry")
+                if (attribute.AttributeClass.Name == "ExponentialBackoffRetryAttribute")
                 {
                     var maxRetryCountString = attribute.GetArgumentByConstructor(0)?.Value?.ToString();
                     var minimumIntervalString = attribute.GetArgumentByConstructor(1)?.Value?.ToString();

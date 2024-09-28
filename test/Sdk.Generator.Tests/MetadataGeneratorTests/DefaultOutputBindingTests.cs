@@ -2,7 +2,7 @@
 using System.Threading.Tasks;
 using Xunit;
 
-namespace Microsoft.Azure.Functions.SdkGeneratorTests.PrecompiledFunctionMetadataProviderGeneratorTests
+namespace Microsoft.Azure.Functions.SdkGeneratorTests.MetadataGeneratorTests
 {
     public class DefaultOutputBindingTests
     {

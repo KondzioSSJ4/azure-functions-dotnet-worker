@@ -13,9 +13,13 @@ namespace Microsoft.Azure.Functions.SdkGeneratorTests.Helpers
             ["build_property.FunctionsExecutionModel"] = "isolated"
         };
 
-        public SourceGeneratorConfigProvider WithNamespace(string generatedCodeNamespace)
+        public SourceGeneratorConfigProvider WithNamespace(string? generatedCodeNamespace)
         {
-            _config["build_property.FunctionsGeneratedCodeNamespace"] = generatedCodeNamespace;
+            if (!string.IsNullOrWhiteSpace(generatedCodeNamespace))
+            {
+                _config["build_property.FunctionsGeneratedCodeNamespace"] = generatedCodeNamespace;
+            }
+
             return this;
         }
 
@@ -40,11 +44,14 @@ namespace Microsoft.Azure.Functions.SdkGeneratorTests.Helpers
             return this;
         }
 
-        public SourceGeneratorConfigProvider With(IEnumerable<KeyValuePair<string, string>> values)
+        public SourceGeneratorConfigProvider With(IEnumerable<KeyValuePair<string, string>>? values)
         {
-            foreach (var pair in values)
+            if (values is not null)
             {
-                _config[pair.Key] = pair.Value;
+                foreach (var pair in values)
+                {
+                    _config[pair.Key] = pair.Value;
+                }
             }
 
             return this;

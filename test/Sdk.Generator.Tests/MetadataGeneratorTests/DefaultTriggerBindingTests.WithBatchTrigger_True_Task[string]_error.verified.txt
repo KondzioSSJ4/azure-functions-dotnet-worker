@@ -1,0 +1,15 @@
+﻿{
+  Diagnostics: [
+    {
+      Id: AZFW0019,
+      Title: Invalid binding type,
+      Severity: Error,
+      WarningLevel: 0,
+      Location: : (15,76)-(15,81),
+      HelpLink: https://aka.ms/azfw-rules?ruleid=AZFW0019,
+      MessageFormat: Binding type not allow {0} as {1} type,
+      Message: Binding type not allow Task, ValueTask, Task<T>, ValueTask<T> as input trigger type,
+      Category: FunctionMetadataGeneration
+    }
+  ]
+}

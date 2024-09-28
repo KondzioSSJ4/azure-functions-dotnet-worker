@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
@@ -93,6 +94,55 @@ namespace Microsoft.Azure.Functions.SdkGeneratorTests.Helpers
             _validationTasks.Add(
                 Configure(
                     Verifier.Verify(_generatorDriverRunResult),
+                    callerFileName,
+                    callerName,
+                    paramsNames));
+
+            return this;
+        }
+
+        internal SourceGeneratorResult VerifySpecifiedFile(
+            string fileName,
+            string parameters = "",
+            [CallerFilePath] string callerFileName = "",
+            [CallerMemberName] string callerName = "")
+        {
+            _validationTasks.Add(
+                Configure(
+                    Verifier.Verify(_generatorDriverRunResult)
+                        .IgnoreGeneratedResult(x => x.HintName != fileName),
+                    callerFileName,
+                    callerName,
+                    parameters));
+
+            return this;
+        }
+
+        internal SourceGeneratorResult VerifyDiagnosticsOnly(
+            string parameters = "",
+            [CallerFilePath] string callerFileName = "",
+            [CallerMemberName] string callerName = "")
+        {
+            _validationTasks.Add(
+               Configure(
+                   Verifier.Verify(_generatorDriverRunResult)
+                        .IgnoreGeneratedResult(x => true),
+                    callerFileName,
+                    callerName,
+                    parameters));
+
+            return this;
+        }
+
+        internal SourceGeneratorResult VerifyOutput<T>(
+            Func<GeneratorDriverRunResult, T> getValueToVerify,
+            string? paramsNames = null,
+            [CallerFilePath] string callerFileName = "",
+            [CallerMemberName] string callerName = "")
+        {
+            _validationTasks.Add(
+                Configure(
+                    Verifier.Verify(getValueToVerify.Invoke(_generatorDriverRunResult)),
                     callerFileName,
                     callerName,
                     paramsNames));
@@ -202,17 +252,18 @@ namespace Microsoft.Azure.Functions.SdkGeneratorTests.Helpers
             return fileName;
         }
 
+        [DebuggerDisplay("[{Severity}] {Id} '{Message}' in '{IssueSyntaxLine}'")]
         private class DiagnosticShort
         {
-            private const int TextRangeInfoChars = 30;
+            private const int TextRangeInfoChars = 10;
 
             public DiagnosticShort(
                 Diagnostic diagnostic,
                 SourceText text)
             {
-                Id = diagnostic.Id;
+                Id = diagnostic.Id.Trim('"');
                 Severity = diagnostic.Severity;
-                Message = diagnostic.GetMessage();
+                Message = diagnostic.GetMessage().Trim('"');
                 IssueSyntaxLine = GetLine(diagnostic, text);
             }
 
@@ -232,7 +283,7 @@ namespace Microsoft.Azure.Functions.SdkGeneratorTests.Helpers
                         Math.Max(0, span.Start - TextRangeInfoChars),
                         Math.Min(text.Length - 1, span.End + TextRangeInfoChars)));
 
-                return subText.ToString();
+                return subText.ToString().Trim();
             }
 
             public string Id { get; }

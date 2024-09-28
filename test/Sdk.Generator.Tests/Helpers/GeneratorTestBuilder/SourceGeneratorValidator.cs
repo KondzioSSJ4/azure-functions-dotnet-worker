@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -20,13 +21,13 @@ namespace Microsoft.Azure.Functions.SdkGeneratorTests.Helpers
 
         private readonly List<ISourceGenerator> _generators = new();
         private readonly List<string> _inputs = new();
-        private readonly LanguageVersion _languageVersion;
         private readonly HashSet<Assembly> _assemblies = new()
         {
             typeof(FunctionAttribute).Assembly,
             typeof(Task).Assembly,
             typeof(WorkerExtensionStartupAttribute).Assembly,
-            typeof(HostBuilder).Assembly
+            typeof(HostBuilder).Assembly,
+            typeof(ImmutableList).Assembly
         };
 
         private readonly List<string> _ignoredErrors = new()
@@ -36,6 +37,12 @@ namespace Microsoft.Azure.Functions.SdkGeneratorTests.Helpers
 
         public LanguageVersion LanguageVersion { get; set; } = LanguageVersion.Latest;
         public SourceGeneratorConfigProvider Config { get; } = new();
+
+        public SourceGeneratorValidator Configure(Action<SourceGeneratorConfigProvider> configure)
+        {
+            configure.Invoke(Config);
+            return this;
+        }
 
         public SourceGeneratorValidator WithGenerator(IIncrementalGenerator generator)
         {
@@ -49,11 +56,25 @@ namespace Microsoft.Azure.Functions.SdkGeneratorTests.Helpers
             return this;
         }
 
-        public SourceGeneratorValidator WithAssemblies(params Assembly[] assemblies)
+        public SourceGeneratorValidator WithAssembly(params Assembly[] assemblies)
         {
             foreach (var item in assemblies)
             {
                 _assemblies.Add(item);
+            }
+
+            return this;
+        }
+
+        public SourceGeneratorValidator WithAssembly(
+            IReadOnlyCollection<Assembly>? assemblies)
+        {
+            if (assemblies is not null)
+            {
+                foreach (var item in assemblies)
+                {
+                    _assemblies.Add(item);
+                }
             }
 
             return this;
@@ -90,7 +111,8 @@ namespace Microsoft.Azure.Functions.SdkGeneratorTests.Helpers
             var compilation = CSharpCompilation.Create(
                 "TestProject",
                 syntaxTrees,
-                metadata);
+                metadata,
+                new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
 
             AssertDiagnostics(compilation);
 

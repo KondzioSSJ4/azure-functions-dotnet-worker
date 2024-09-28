@@ -20,3 +20,4 @@ namespace AspNetIntegration
 
     public record Person(string Name, int Age);
 }
+

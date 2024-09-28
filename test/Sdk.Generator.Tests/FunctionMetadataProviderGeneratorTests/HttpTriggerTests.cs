@@ -3,6 +3,7 @@
 
 using System.Collections.Generic;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using Microsoft.Azure.Functions.SdkGeneratorTests.Helpers;
 using Microsoft.Azure.Functions.Worker.Sdk.Generators;
@@ -17,28 +18,6 @@ namespace Microsoft.Azure.Functions.SdkGeneratorTests
     {
         public class HttpTriggerTests
         {
-            private readonly Assembly[] _referencedExtensionAssemblies;
-
-            public HttpTriggerTests()
-            {
-                var abstractionsExtension = Assembly.LoadFrom("Microsoft.Azure.Functions.Worker.Extensions.Abstractions.dll");
-                var httpExtension = Assembly.LoadFrom("Microsoft.Azure.Functions.Worker.Extensions.Http.dll");
-                var hostingExtension = typeof(HostBuilder).Assembly;
-                var diExtension = typeof(DefaultServiceProviderFactory).Assembly;
-                var hostingAbExtension = typeof(IHost).Assembly;
-                var diAbExtension = typeof(IServiceCollection).Assembly;
-
-                _referencedExtensionAssemblies = new[]
-                {
-                    abstractionsExtension,
-                    httpExtension,
-                    hostingExtension,
-                    hostingAbExtension,
-                    diExtension,
-                    diAbExtension
-                };
-            }
-
             [Theory]
             [InlineData(LanguageVersion.CSharp7_3)]
             [InlineData(LanguageVersion.CSharp8)]
@@ -67,11 +46,10 @@ namespace Microsoft.Azure.Functions.SdkGeneratorTests
                 }
                 """;
 
-                await new FunctionMetadataProviderGenerator()
-                    .RunAndVerify(
-                        inputCode,
-                        _referencedExtensionAssemblies,
-                        languageVersion: languageVersion);
+                await Test(
+                    inputCode,
+                    languageVersion);
+
             }
 
             [Theory]
@@ -102,11 +80,9 @@ namespace Microsoft.Azure.Functions.SdkGeneratorTests
                 }
                 """;
 
-                await new FunctionMetadataProviderGenerator()
-                    .RunAndVerify(
-                        inputCode,
-                        _referencedExtensionAssemblies,
-                        languageVersion: languageVersion);
+                await Test(
+                     inputCode,
+                     languageVersion);
             }
 
             [Theory]
@@ -148,12 +124,10 @@ namespace Microsoft.Azure.Functions.SdkGeneratorTests
                     {  Constants.BuildProperties.GeneratedCodeNamespace, "MyCompany.MyProject.MyApp"}
                 };
 
-                await new FunctionMetadataProviderGenerator()
-                    .RunAndVerify(
-                        inputCode,
-                        _referencedExtensionAssemblies,
-                        languageVersion: languageVersion,
-                        buildPropertiesDictionary: buildPropertiesDict);
+                await Test(
+                    inputCode,
+                    languageVersion,
+                    buildPropertiesDictionary: buildPropertiesDict);
             }
 
             [Theory]
@@ -197,12 +171,32 @@ namespace Microsoft.Azure.Functions.SdkGeneratorTests
                     {  Constants.BuildProperties.GeneratedCodeNamespace, "MyCompany.MyProject.MyApp"}
                 };
 
-                await new FunctionMetadataProviderGenerator()
-                    .RunAndVerify(
-                        inputCode,
-                        _referencedExtensionAssemblies,
-                        languageVersion: languageVersion,
-                        buildPropertiesDictionary: buildPropertiesDict);
+                await Test(
+                    inputCode,
+                    languageVersion,
+                    buildPropertiesDictionary: buildPropertiesDict);
+            }
+
+            private async Task Test(
+                string sourceCode,
+                LanguageVersion languageVersion,
+                IDictionary<string, string>? buildPropertiesDictionary = null,
+                [CallerMemberName] string callerName = "")
+            {
+                await new SourceGeneratorValidator() { LanguageVersion = languageVersion }
+                    .Configure(x => x.With(buildPropertiesDictionary))
+                    .WithGenerator(new FunctionMetadataProviderGenerator())
+                    .WithAssembly(
+                        Assembly.LoadFrom("Microsoft.Azure.Functions.Worker.Extensions.Abstractions.dll"),
+                        Assembly.LoadFrom("Microsoft.Azure.Functions.Worker.Extensions.Http.dll"),
+                        typeof(HostBuilder).Assembly,
+                        typeof(DefaultServiceProviderFactory).Assembly,
+                        typeof(IHost).Assembly,
+                        typeof(IServiceCollection).Assembly)
+                    .WithInput(sourceCode)
+                    .Build()
+                    .AssertDiagnosticsOfGeneratedCode()
+                    .VerifyOutput();
             }
         }
     }

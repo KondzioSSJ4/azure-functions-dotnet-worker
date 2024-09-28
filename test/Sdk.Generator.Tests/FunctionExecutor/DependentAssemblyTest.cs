@@ -15,35 +15,20 @@ namespace Microsoft.Azure.Functions.SdkGeneratorTests
     {
         public class DependentAssemblyTest
         {
-            private readonly Assembly[] _referencedAssemblies;
-
-            public DependentAssemblyTest()
-            {
-                var abstractionsExtension = Assembly.LoadFrom("Microsoft.Azure.Functions.Worker.Extensions.Abstractions.dll");
-                var httpExtension = Assembly.LoadFrom("Microsoft.Azure.Functions.Worker.Extensions.Http.dll");
-                var hostingExtension = typeof(HostBuilder).Assembly;
-                var diExtension = typeof(DefaultServiceProviderFactory).Assembly;
-                var hostingAbExtension = typeof(IHost).Assembly;
-                var diAbExtension = typeof(IServiceCollection).Assembly;
-                var dependentAssembly = Assembly.LoadFrom("DependentAssemblyWithFunctions.dll");
-
-                _referencedAssemblies = new[]
-                {
-                    abstractionsExtension,
-                    httpExtension,
-                    hostingExtension,
-                    hostingAbExtension,
-                    diExtension,
-                    diAbExtension,
-                    dependentAssembly
-                };
-            }
-
             [Fact]
             public async Task FunctionsFromDependentAssembly()
             {
-                await new FunctionExecutorGenerator()
-                    .RunAndVerify("""
+                await new SourceGeneratorValidator()
+                .WithGenerator(new FunctionExecutorGenerator())
+                .WithAssembly(
+                    Assembly.LoadFrom("Microsoft.Azure.Functions.Worker.Extensions.Abstractions.dll"),
+                    Assembly.LoadFrom("Microsoft.Azure.Functions.Worker.Extensions.Http.dll"),
+                    typeof(HostBuilder).Assembly,
+                    typeof(DefaultServiceProviderFactory).Assembly,
+                    typeof(IHost).Assembly,
+                    typeof(IServiceCollection).Assembly,
+                    Assembly.LoadFrom("DependentAssemblyWithFunctions.dll"))
+                .WithInput("""
                         using System;
                         using Microsoft.Azure.Functions.Worker;
                         using Microsoft.Azure.Functions.Worker.Http;
@@ -58,7 +43,10 @@ namespace Microsoft.Azure.Functions.SdkGeneratorTests
                                 }
                             }
                         }
-                        """);
+                        """)
+                .Build()
+                .AssertDiagnosticsOfGeneratedCode()
+                .VerifyOutput();
             }
         }
     }

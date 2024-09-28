@@ -4,25 +4,51 @@ using System.Linq;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
+using FluentAssertions;
 using Microsoft.Azure.Functions.SdkGeneratorTests.Helpers;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
+using Microsoft.Azure.Functions.Worker.Sdk.Generators;
+using Microsoft.Azure.Functions.Worker.Sdk.Generators.MetadataGenerator;
+using Microsoft.CodeAnalysis;
 using Xunit;
 
-namespace Microsoft.Azure.Functions.SdkGeneratorTests.PrecompiledFunctionMetadataProviderGeneratorTests
+namespace Microsoft.Azure.Functions.SdkGeneratorTests.MetadataGeneratorTests
 {
     public class RetryTests
     {
+        public static IEnumerable<object[]> WithFixedDelay_TestCases()
+        {
+            static object[] Test(
+                int tries,
+                string interval,
+                Action<RetryModel.RetryInfo?> assert)
+                => new object[] { tries, interval, assert };
+
+            Action<RetryModel.RetryInfo?> WithSuccess(TimeSpan expectedDelay)
+            {
+                return x =>
+                {
+                    x.Strategy.Should().Be(RetryModel.RetryStrategy.FixedDelay);
+                    x.DelayInterval.Should().Be(expectedDelay);
+                };
+            }
+
+            Action<RetryModel.RetryInfo?> InvalidDelay = x => x.Should().BeNull();
+
+            yield return Test(1, "00:00:10", WithSuccess(TimeSpan.FromSeconds(10)));
+            yield return Test(1, "1.00:00:00", WithSuccess(TimeSpan.FromDays(1)));
+            yield return Test(-1, "00:00:10", InvalidDelay);
+            yield return Test(1, "-00:00:10", InvalidDelay);
+            yield return Test(1, "invalidInterval", InvalidDelay);
+        }
+
         [Theory]
-        [InlineData(1, "00:00:10", "valid retry")]
-        //[InlineData(1, "1.00:00:10", "valid retry")]
-        //[InlineData(-1, "00:00:10", "error")]
-        //[InlineData(1, "-00:00:10", "error")]
-        //[InlineData(1, "invalidInterval", "error")]
-        public Task WithFixedDelay(
+        [MemberData(nameof(WithFixedDelay_TestCases))]
+        internal Task WithFixedDelay(
             int tries,
             string interval,
-            string expectation)
+            Action<RetryModel.RetryInfo?> assert)
         {
             return Test($$"""
                 using System;
@@ -48,24 +74,51 @@ namespace Microsoft.Azure.Functions.SdkGeneratorTests.PrecompiledFunctionMetadat
                     }
                 }
                 """,
-                $"{tries}_{interval}_{expectation}",
+                assert,
+                parametersText: $"{tries}_{interval}",
                 additionalAssemblies: new[]
                 {
                     typeof(TimerTriggerAttribute).Assembly
                 });
         }
 
+        public static IEnumerable<object[]> WithExponentialBackoff_TestCases()
+        {
+            static object[] Test(
+                int tries,
+                string minimumInterval,
+                string maximumInterval,
+                Action<RetryModel.RetryInfo?> assert)
+                => new object[] { tries, minimumInterval, maximumInterval, assert };
+
+            Action<RetryModel.RetryInfo?> WithSuccess(
+                TimeSpan minimumInterval,
+                TimeSpan maximumInterval)
+            {
+                return x =>
+                {
+                    x.Strategy.Should().Be(RetryModel.RetryStrategy.ExponentialBackoff);
+                    x.MinimumInterval.Should().Be(minimumInterval);
+                    x.MaximumInterval.Should().Be(maximumInterval);
+                };
+            }
+
+            Action<RetryModel.RetryInfo?> InvalidDelay = x => x.Should().BeNull();
+
+            yield return Test(1, "00:00:10", "00:20:00", WithSuccess(TimeSpan.FromSeconds(10), TimeSpan.FromMinutes(20)));
+            yield return Test(1, "00:40:10", "00:20:00", InvalidDelay);
+            yield return Test(-1, "00:00:10", "00:20:00", InvalidDelay);
+            yield return Test(1, "00:00:10", "-00:20:00", InvalidDelay);
+            yield return Test(1, "-00:00:10", "00:20:00", InvalidDelay);
+        }
+
         [Theory]
-        [InlineData(1, "00:00:10", "00:20:00", "valid retry")]
-        [InlineData(1, "00:40:10", "00:20:00", "error")]
-        [InlineData(-1, "00:00:10", "00:20:00", "error")]
-        [InlineData(1, "00:00:10", "-00:20:00", "error")]
-        [InlineData(1, "-00:00:10", "00:20:00", "error")]
+        [MemberData(nameof(WithExponentialBackoff_TestCases))]
         public Task WithExponentialBackoff(
             int tries,
-            string minInterval,
-            string maxInterval,
-            string expectation)
+            string minimumInterval,
+            string maximumInterval,
+            Action<RetryModel.RetryInfo?> assert)
         {
             return Test($$"""
                 using System;
@@ -82,7 +135,7 @@ namespace Microsoft.Azure.Functions.SdkGeneratorTests.PrecompiledFunctionMetadat
                     public class TestClass
                     {
                         [Function(nameof(Run))]
-                        [ExponentialBackoffRetry({{tries}}, "{{minInterval}}", "{{maxInterval}}")]
+                        [ExponentialBackoffRetry({{tries}}, "{{minimumInterval}}", "{{maximumInterval}}")]
                         public static void Run([TimerTrigger("0 */5 * * * *")] TimerInfo timerInfo,
                             FunctionContext context)
                         {
@@ -91,7 +144,8 @@ namespace Microsoft.Azure.Functions.SdkGeneratorTests.PrecompiledFunctionMetadat
                     }
                 }
                 """,
-                $"{tries}_{minInterval}_{maxInterval}_{expectation}",
+                assert,
+                $"{tries}_{minimumInterval}_{maximumInterval}",
                 additionalAssemblies: new[]
                 {
                     typeof(TimerTriggerAttribute).Assembly
@@ -126,6 +180,7 @@ namespace Microsoft.Azure.Functions.SdkGeneratorTests.PrecompiledFunctionMetadat
                     }
                 }
                 """,
+                x => x.Should().BeNull(),
                 additionalAssemblies: new[]
                 {
                     typeof(TimerTriggerAttribute).Assembly
@@ -159,6 +214,7 @@ namespace Microsoft.Azure.Functions.SdkGeneratorTests.PrecompiledFunctionMetadat
                     }
                 }
                 """,
+                x => x.Should().BeNull(),
                 additionalAssemblies: new[]
                 {
                     typeof(HttpTriggerAttribute).Assembly,
@@ -168,21 +224,40 @@ namespace Microsoft.Azure.Functions.SdkGeneratorTests.PrecompiledFunctionMetadat
 
         private async Task Test(
             string sourceCode,
-            string parameterNames = null,
-            IReadOnlyCollection<Assembly> additionalAssemblies = null,
+            Action<RetryModel.RetryInfo?> assert,
+            string? parametersText = null,
+            IReadOnlyCollection<Assembly>? additionalAssemblies = null,
             [CallerMemberName] string callerName = "")
         {
-            await new Worker.Sdk.Generators.MetadataGenerator.PrecompiledFunctionMetadataProviderGenerator()
-            //await new Worker.Sdk.Generators.FunctionMetadataProviderGenerator()
-                .RunAndVerify(
-                    sourceCode,
-                    new[]
-                    {
-                        typeof(FunctionAttribute).Assembly,
-                        typeof(Task).Assembly
-                    }.Union(additionalAssemblies ?? Array.Empty<Assembly>()),
-                    paramsNames: parameterNames,
+            var emiter = new RetryLoaderEmiter();
+
+            await new SourceGeneratorValidator()
+                .WithGenerator(new PrecompiledFunctionMetadataProviderGenerator(new[] { emiter }))
+                .WithAssembly(
+                    typeof(FunctionAttribute).Assembly,
+                    typeof(Task).Assembly)
+                .WithAssembly(additionalAssemblies)
+                .WithInput(sourceCode)
+                .Build()
+                .AssertDiagnosticsOfGeneratedCode()
+                .VerifyDiagnosticsOnly(
+                    parameters: parametersText,
                     callerName: callerName);
+
+            assert.Invoke(emiter.Info);
+        }
+
+        private class RetryLoaderEmiter : IPrecompiledFunctionMetadataEmiter
+        {
+            public RetryModel.RetryInfo? Info { get; private set; }
+
+            public void Emit(
+                SourceProductionContext ctx,
+                IReadOnlyCollection<FunctionDeclaration> src,
+                AnalyzerConfigurationProvider analyzer)
+            {
+                Info = src.SingleOrDefault()?.Retry?.Info;
+            }
         }
     }
 }

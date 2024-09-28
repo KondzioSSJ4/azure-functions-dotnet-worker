@@ -1,0 +1,15 @@
+﻿{
+  Diagnostics: [
+    {
+      Id: AZFW0021,
+      Title: Invalid retry provided,
+      Severity: Error,
+      WarningLevel: 0,
+      Location: : (15,27)-(15,30),
+      HelpLink: https://aka.ms/azfw-rules?ruleid=AZFW0021,
+      MessageFormat: Invalid retry, {0} must be {1}.,
+      Message: Invalid retry, minimumInterval must be valid positive TimeSpan.,
+      Category: FunctionMetadataGeneration
+    }
+  ]
+}

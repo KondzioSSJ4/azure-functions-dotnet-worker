@@ -7,11 +7,11 @@ namespace Microsoft.Azure.Functions.Worker.Sdk.Generators.MetadataGenerator
     public sealed record RetryModel
     {
         public string Code { get; }
-        public string Info { get; }
+        internal RetryInfo Info { get; }
 
         private RetryModel(
             string code,
-            string info)
+            RetryInfo info)
         {
             Code = code;
             Info = info;
@@ -31,9 +31,12 @@ namespace Microsoft.Azure.Functions.Worker.Sdk.Generators.MetadataGenerator
                     }
                     """;
 
-            var info = $"ExponentialBackoff {maxRetryCount}, {minimumInterval} to {maximumInterval}";
-
-            return new RetryModel(code, info);
+            return new RetryModel(code, new RetryInfo
+            {
+                MaxRetryCount = maxRetryCount,
+                MinimumInterval = minimumInterval,
+                MaximumInterval = maximumInterval
+            });
         }
 
         public static RetryModel AsFixedDelay(
@@ -48,14 +51,44 @@ namespace Microsoft.Azure.Functions.Worker.Sdk.Generators.MetadataGenerator
                     }
                     """;
 
-            var info = $"FixedDelay {maxRetryCount}, {delayInterval}";
-
-            return new RetryModel(code, info);
+            return new RetryModel(code, new RetryInfo()
+            {
+                MaxRetryCount = maxRetryCount,
+                DelayInterval = delayInterval
+            });
         }
 
         private static string ToCode(TimeSpan value)
         {
             return $"new global::System.TimeSpan({value.Days}, {value.Hours}, {value.Minutes}, {value.Seconds}, {value.Milliseconds})";
+        }
+
+        public enum RetryStrategy
+        {
+            FixedDelay = 1,
+            ExponentialBackoff
+        }
+
+        public class RetryInfo
+        {
+            public int MaxRetryCount { get; set; }
+            public TimeSpan? DelayInterval { get; set; }
+            public TimeSpan? MinimumInterval { get; set; }
+            public TimeSpan? MaximumInterval { get; set; }
+
+            public RetryStrategy? Strategy => DelayInterval is null ? RetryStrategy.ExponentialBackoff : RetryStrategy.FixedDelay;
+
+            public override string ToString()
+            {
+                return Strategy switch
+                {
+                    RetryStrategy.FixedDelay => $"FixedDelay {MaxRetryCount}, {DelayInterval}",
+                    RetryStrategy.ExponentialBackoff => $"ExponentialBackoff {MaxRetryCount}, {MinimumInterval} to {MaximumInterval}",
+
+                    _ => throw new NotSupportedException($"Invalid retry {Strategy}")
+                };
+
+            }
         }
     }
 }

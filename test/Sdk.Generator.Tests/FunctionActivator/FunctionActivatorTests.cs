@@ -206,17 +206,19 @@ namespace Microsoft.Azure.Functions.SdkGeneratorTests.FunctionActivator
             LanguageVersion? languageVersion = null,
             [CallerMemberName] string callerName = "")
         {
-            await new FunctionActivatorGenerator()
-                .RunAndVerify(
-                    sourceCode,
-                    new[]
-                    {
-                        typeof(HttpTriggerAttribute).Assembly,
-                        typeof(FunctionAttribute).Assembly,
-                        typeof(IFunctionActivator).Assembly
-                    },
-                    languageVersion: languageVersion ?? LanguageVersion.CSharp10,
-                    callerName: callerName);
+            await new SourceGeneratorValidator()
+            {
+                LanguageVersion = languageVersion ?? LanguageVersion.CSharp10
+            }
+            .WithGenerator(new FunctionActivatorGenerator())
+            .WithAssembly(
+                typeof(HttpTriggerAttribute).Assembly,
+                typeof(FunctionAttribute).Assembly,
+                typeof(IFunctionActivator).Assembly)
+            .WithInput(sourceCode)
+            .Build()
+            .AssertDiagnosticsOfGeneratedCode()
+            .VerifyOutput(callerName: callerName);
         }
     }
 }

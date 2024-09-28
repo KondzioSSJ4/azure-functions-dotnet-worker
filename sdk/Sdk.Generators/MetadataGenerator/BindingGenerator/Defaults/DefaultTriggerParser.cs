@@ -347,7 +347,7 @@ namespace Microsoft.Azure.Functions.Worker.Sdk.Generators.MetadataGenerator.Bind
                 return $$"""
                     new global::Microsoft.Azure.Functions.Worker.Core.FunctionMetadata.DefaultGeneratedBinding(
                         name: "{{_entries["name"]}}",
-                        direction: global::Microsoft.Azure.Functions.Worker.Core.FunctionMetadata.In,
+                        direction: global::Microsoft.Azure.Functions.Worker.Core.FunctionMetadata.FunctionBindingDirection.In,
                         bindingType: "{{_entries[TypeAttribute]}}",
                         dataType: null /* TODO */,
                         properties: {{propertiesCode.Replace(Environment.NewLine, Environment.NewLine + "    ")}})

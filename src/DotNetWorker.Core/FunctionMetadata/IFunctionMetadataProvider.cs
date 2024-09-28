@@ -18,4 +18,24 @@ namespace Microsoft.Azure.Functions.Worker.Core.FunctionMetadata
         /// <returns>A Task with IEnumerable of FunctionMetadata</returns>
         Task<ImmutableArray<IFunctionMetadata>> GetFunctionMetadataAsync(string directory);
     }
+
+    public interface IAssemblyTypeProvider<T>
+    {
+        T Value { get; }
+    }
+
+    /// <summary>
+    /// Get's the provider for given assembly to collect them in top level provider
+    /// </summary>
+    public class AssemblyTypeProvider<T, TInject> : IAssemblyTypeProvider<T>
+        where TInject : class, T
+    {
+        public AssemblyTypeProvider(
+            TInject value)
+        {
+            Value = value;
+        }
+
+        public T Value { get; }
+    }
 }

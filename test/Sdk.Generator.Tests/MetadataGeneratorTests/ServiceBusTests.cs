@@ -3,10 +3,11 @@ using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using Microsoft.Azure.Functions.SdkGeneratorTests.Helpers;
 using Microsoft.Azure.Functions.Worker;
+using Microsoft.Azure.Functions.Worker.Sdk.Generators.MetadataGenerator;
 using Microsoft.CodeAnalysis.CSharp;
 using Xunit;
 
-namespace Microsoft.Azure.Functions.SdkGeneratorTests.PrecompiledFunctionMetadataProviderGeneratorTests
+namespace Microsoft.Azure.Functions.SdkGeneratorTests.MetadataGeneratorTests
 {
     public class ServiceBusTests
     {
@@ -244,18 +245,18 @@ namespace Microsoft.Azure.Functions.SdkGeneratorTests.PrecompiledFunctionMetadat
             string parameterNames = null,
             [CallerMemberName] string callerName = "")
         {
-            await new Worker.Sdk.Generators.MetadataGenerator.PrecompiledFunctionMetadataProviderGenerator()
-            //await new Worker.Sdk.Generators.FunctionMetadataProviderGenerator()
-                .RunAndVerify(
-                    sourceCode,
-                    new[]
-                    {
-                        typeof(FunctionAttribute).Assembly,
-                        typeof(Task).Assembly,
-                        typeof(ServiceBusTriggerAttribute).Assembly
-                    },
-                    languageVersion: languageVersion,
-                    paramsNames: parameterNames,
+            await new SourceGeneratorValidator() { LanguageVersion = languageVersion }
+                .WithGenerator(new PrecompiledFunctionMetadataProviderGenerator())
+                .WithAssembly(
+                    typeof(FunctionAttribute).Assembly,
+                    typeof(Task).Assembly,
+                    typeof(ServiceBusTriggerAttribute).Assembly)
+                .WithInput(sourceCode)
+                .Build()
+                .AssertDiagnosticsOfGeneratedCode()
+                .VerifySpecifiedFile(
+                    BindingDeclarationEmiter.AssemblyMetadataFile,
+                    parameters: parameterNames,
                     callerName: callerName);
         }
     }

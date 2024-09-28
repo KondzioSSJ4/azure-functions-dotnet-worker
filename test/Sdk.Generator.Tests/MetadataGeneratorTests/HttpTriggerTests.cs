@@ -1,5 +1,4 @@
-﻿using System;
-using System.Linq;
+﻿using System.Collections.Generic;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
@@ -7,10 +6,11 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.Functions.SdkGeneratorTests.Helpers;
 using Microsoft.Azure.Functions.Worker;
+using Microsoft.Azure.Functions.Worker.Sdk.Generators.MetadataGenerator;
 using Microsoft.CodeAnalysis.CSharp;
 using Xunit;
 
-namespace Microsoft.Azure.Functions.SdkGeneratorTests.PrecompiledFunctionMetadataProviderGeneratorTests
+namespace Microsoft.Azure.Functions.SdkGeneratorTests.MetadataGeneratorTests
 {
     public class HttpTriggerTests
     {
@@ -711,24 +711,23 @@ namespace Microsoft.Azure.Functions.SdkGeneratorTests.PrecompiledFunctionMetadat
         private async Task Test(
             string sourceCode,
             LanguageVersion languageVersion,
-            Assembly[]? additionalAssemblies = null,
+            IReadOnlyCollection<Assembly>? additionalAssemblies = null,
             string? paramsNames = null,
             [CallerMemberName] string callerName = "")
         {
-            await new Worker.Sdk.Generators.MetadataGenerator.PrecompiledFunctionMetadataProviderGenerator()
-            //await new Worker.Sdk.Generators.FunctionMetadataProviderGenerator()
-                .RunAndVerify(
-                    sourceCode,
-                    new[]
-                    {
-                        typeof(HttpTriggerAttribute).Assembly,
-                        typeof(FunctionAttribute).Assembly,
-                        typeof(HttpRequest).Assembly
-                    }
-                    .Concat(additionalAssemblies ?? Array.Empty<Assembly>())
-                    .ToArray(),
-                    languageVersion: languageVersion,
-                    paramsNames: paramsNames,
+            await new SourceGeneratorValidator() { LanguageVersion = languageVersion }
+                .WithGenerator(new PrecompiledFunctionMetadataProviderGenerator())
+                .WithAssembly(
+                    typeof(HttpTriggerAttribute).Assembly,
+                    typeof(FunctionAttribute).Assembly,
+                    typeof(HttpRequest).Assembly)
+                .WithAssembly(additionalAssemblies)
+                .WithInput(sourceCode)
+                .Build()
+                .AssertDiagnosticsOfGeneratedCode()
+                .VerifySpecifiedFile(
+                    BindingDeclarationEmiter.AssemblyMetadataFile,
+                    parameters: paramsNames,
                     callerName: callerName);
         }
     }

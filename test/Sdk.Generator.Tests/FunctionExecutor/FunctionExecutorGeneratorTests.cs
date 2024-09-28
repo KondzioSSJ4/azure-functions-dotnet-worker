@@ -338,27 +338,26 @@ generatedCodeNamespace: "MyCompany.MyProject.MyApp");
             string? generatedCodeNamespace = null,
             [CallerMemberName] string callerName = "")
         {
-            await new FunctionExecutorGenerator()
-                .RunAndVerify(
-                    sourceCode,
-                    new[]
-                    {
-                        typeof(HttpTriggerAttribute).Assembly,
-                        typeof(FunctionAttribute).Assembly,
-                        typeof(QueueTriggerAttribute).Assembly,
-                        typeof(EventHubTriggerAttribute).Assembly,
-                        typeof(QueueMessage).Assembly,
-                        typeof(EventData).Assembly,
-                        typeof(BlobInputAttribute).Assembly,
-                        typeof(ServiceProviderServiceExtensions).Assembly,
-                        typeof(ILogger).Assembly,
-                        typeof(IConfiguration).Assembly,
-                        typeof(HostBuilder).Assembly,
-                        typeof(IHostBuilder).Assembly
-                    },
-                    languageVersion: languageVersion,
-                    generatedCodeNamespace: generatedCodeNamespace,
-                    callerName: callerName);
+            await new SourceGeneratorValidator() { LanguageVersion = languageVersion }
+                .Configure(x => x.WithNamespace(generatedCodeNamespace))
+                .WithGenerator(new FunctionExecutorGenerator())
+                .WithAssembly(
+                    typeof(HttpTriggerAttribute).Assembly,
+                    typeof(FunctionAttribute).Assembly,
+                    typeof(QueueTriggerAttribute).Assembly,
+                    typeof(EventHubTriggerAttribute).Assembly,
+                    typeof(QueueMessage).Assembly,
+                    typeof(EventData).Assembly,
+                    typeof(BlobInputAttribute).Assembly,
+                    typeof(ServiceProviderServiceExtensions).Assembly,
+                    typeof(ILogger).Assembly,
+                    typeof(IConfiguration).Assembly,
+                    typeof(HostBuilder).Assembly,
+                    typeof(IHostBuilder).Assembly)
+                .WithInput(sourceCode)
+                .Build()
+                .AssertDiagnosticsOfGeneratedCode()
+                .VerifyOutput();
         }
     }
 }

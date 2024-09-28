@@ -8,6 +8,11 @@ namespace Microsoft.Azure.Functions.Worker.Sdk.Generators.MetadataGenerator
 {
     public sealed class BindingDeclarationEmiter : IPrecompiledFunctionMetadataEmiter
     {
+        internal const string ProviderName = "PrecompiledFunctionMetadataProvider";
+        public const string AssemblyMetadataFile = "PrecompiledFunctionMetadataProviderGenerator.g.cs";
+
+        public const string AggregatorFile = "PrecompiledFunctionMetadataStartup.g.cs";
+
         public void Emit(
             SourceProductionContext ctx,
             IReadOnlyCollection<FunctionDeclaration> src,
@@ -18,9 +23,94 @@ namespace Microsoft.Azure.Functions.Worker.Sdk.Generators.MetadataGenerator
                 return;
             }
 
+            EmitAssemblyMetadata(ctx, src, analyzer);
+            EmitMetadataAggregator(ctx, analyzer);
+        }
+
+        private static void EmitMetadataAggregator(SourceProductionContext ctx, AnalyzerConfigurationProvider analyzer)
+        {
             ctx.AddSource(
-                "PrecompiledFunctionMetadataProviderGenerator.g.cs",
-                $$"""
+                            AggregatorFile,
+                            $$"""
+                using System.Linq;
+                using System.Collections.Immutable;
+                using Microsoft.Extensions.Hosting;
+                using Microsoft.Extensions.DependencyInjection;
+
+                namespace AzureFunctionInternals.{{analyzer.AssemblyName}}
+                {
+                    [global::System.ComponentModel.EditorBrowsableAttribute(global::System.ComponentModel.EditorBrowsableState.Never)]
+                    internal sealed class PrecompiledFunctionMetadataAggregator : global::Microsoft.Azure.Functions.Worker.Core.FunctionMetadata.IFunctionMetadataProvider
+                    {
+                        private readonly global::System.Collections.Generic.IEnumerable<
+                                global::Microsoft.Azure.Functions.Worker.Core.FunctionMetadata.IAssemblyTypeProvider<
+                                    global::Microsoft.Azure.Functions.Worker.Core.FunctionMetadata.IFunctionMetadataProvider>> _providers;
+
+                        public PrecompiledFunctionMetadataAggregator(
+                            global::System.Collections.Generic.IEnumerable<
+                                global::Microsoft.Azure.Functions.Worker.Core.FunctionMetadata.IAssemblyTypeProvider<
+                                    global::Microsoft.Azure.Functions.Worker.Core.FunctionMetadata.IFunctionMetadataProvider>> providers)
+                        {
+                            _providers = providers;
+                        }
+
+                        public async global::System.Threading.Tasks.Task<
+                            global::System.Collections.Immutable.ImmutableArray<
+                                global::Microsoft.Azure.Functions.Worker.Core.FunctionMetadata.IFunctionMetadata>> GetFunctionMetadataAsync(
+                            string directory)
+                        {
+                            var copy = _providers.Where(x => x.Value is not null).Select(x => x.Value).ToArray();
+                            if (copy.Length == 1)
+                            {
+                                return await copy[0].GetFunctionMetadataAsync(directory);
+                            }
+
+                            var results = await global::System.Threading.Tasks.WhenAll(
+                                copy.Select(x => x.GetFunctionMetadataAsync(directory)));
+
+                            return results.ToImmutableArray();
+                        }
+                    }
+
+                    /// <summary>
+                    /// Auto startup class to register the custom <see cref="global::Microsoft.Azure.Functions.Worker.Core.FunctionMetadata.IFunctionMetadataProvider"/> implementation generated for the current worker.
+                    /// </summary>
+                    [global::System.ComponentModel.EditorBrowsableAttribute(global::System.ComponentModel.EditorBrowsableState.Never)]
+                    public sealed class PrecompiledFunctionMetadataProviderAutoStartup : global::Microsoft.Azure.Functions.Worker.IAutoConfigureStartup
+                    {
+                        /// <summary>
+                        /// Configures the <see cref="global::Microsoft.Extensions.Hosting.IHostBuilder"/> to use the custom <see cref="IFunctionMetadataProvider"/> implementation generated for the current worker.
+                        /// </summary>
+                        /// <param name="hostBuilder">The <see cref="global::Microsoft.Extensions.Hosting.IHostBuilder"/> instance to use for service registration.</param>
+                        public void Configure(
+                            global::Microsoft.Extensions.Hosting.IHostBuilder builder)
+                        {
+                            builder.ConfigureServices(s =>
+                            {
+                                s.AddSingleton<global::AzureFunctionInternals.{{analyzer.AssemblyName}}.{{BindingDeclarationEmiter.ProviderName}}>();
+
+                                s.AddSingleton<
+                                    global::Microsoft.Azure.Functions.Worker.Core.FunctionMetadata.IAssemblyTypeProvider<
+                                        global::Microsoft.Azure.Functions.Worker.Core.FunctionMetadata.IFunctionMetadataProvider>,
+                                    global::Microsoft.Azure.Functions.Worker.Core.FunctionMetadata.AssemblyTypeProvider<
+                                        global::Microsoft.Azure.Functions.Worker.Core.FunctionMetadata.IFunctionMetadataProvider,
+                                        global::AzureFunctionInternals.{{analyzer.AssemblyName}}.{{BindingDeclarationEmiter.ProviderName}}>>();
+
+                                s.AddSingleton<
+                                    global::Microsoft.Azure.Functions.Worker.Core.FunctionMetadata.IFunctionMetadataProvider,
+                                    global::AzureFunctionInternals.{{analyzer.AssemblyName}}.PrecompiledFunctionMetadataAggregator>();
+                            });
+                        }
+                    }
+                }
+                """);
+        }
+
+        private static void EmitAssemblyMetadata(SourceProductionContext ctx, IReadOnlyCollection<FunctionDeclaration> src, AnalyzerConfigurationProvider analyzer)
+        {
+            ctx.AddSource(
+                            AssemblyMetadataFile,
+                            $$"""
                 using System;
                 using System.Collections.Generic;
                 using System.Collections.Immutable;
@@ -33,7 +123,7 @@ namespace Microsoft.Azure.Functions.Worker.Sdk.Generators.MetadataGenerator
 
                 namespace AzureFunctionInternals.{{analyzer.AssemblyName}}
                 {
-                    public sealed class PrecompiledFunctionMetadataProvider : global::Microsoft.Azure.Functions.Worker.Core.FunctionMetadata.IFunctionMetadataProvider
+                    public sealed class {{ProviderName}} : global::Microsoft.Azure.Functions.Worker.Core.FunctionMetadata.IFunctionMetadataProvider
                     {
                         public global::System.Threading.Tasks.Task<global::System.Collections.Immutable.ImmutableArray<global::Microsoft.Azure.Functions.Worker.Core.FunctionMetadata.IFunctionMetadata>> GetFunctionMetadataAsync(
                             string directory)
@@ -43,7 +133,9 @@ namespace Microsoft.Azure.Functions.Worker.Sdk.Generators.MetadataGenerator
                 {{BuildMetadata(src, analyzer)}}
                             });
 
-                            return global::System.Threading.Tasks.Task<global::Microsoft.Azure.Functions.Worker.Core.FunctionMetadata.IFunctionMetadata>(results);
+                            return global::System.Threading.Tasks.Task.FromResult<
+                                global::System.Collections.Immutable.ImmutableArray<
+                                    global::Microsoft.Azure.Functions.Worker.Core.FunctionMetadata.IFunctionMetadata>>(results);
                         }
                     }
                 }
@@ -68,7 +160,7 @@ namespace Microsoft.Azure.Functions.Worker.Sdk.Generators.MetadataGenerator
                 {
                     builder.Append($$"""
                     new global::Microsoft.Azure.Functions.Worker.Core.FunctionMetadata.SourceGeneratedFunctionMetadata(
-                        functionId: {{HashFunctionId(function.FunctionName, analyzer.AssemblyFileName, function.MethodName)}},
+                        functionId: "{{HashFunctionId(function.FunctionName, analyzer.AssemblyFileName, function.MethodName)}}",
                         isProxy: false,
                         language: "dotnet-isolated",
                         managedDependencyEnabled: false,
